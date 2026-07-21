@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="巷口麻将">
+  <rect width="512" height="512" rx="96" fill="#0f3a2d"/>
+  <rect x="86" y="70" width="260" height="344" rx="34" fill="#1f694e"/>
+  <rect x="70" y="54" width="260" height="344" rx="34" fill="#fff7e3" stroke="#d4c19b" stroke-width="8"/>
+  <text x="200" y="220" text-anchor="middle" font-family="Songti SC, Noto Serif SC, serif" font-size="118" font-weight="900" fill="#c3362b">中</text>
+  <text x="200" y="322" text-anchor="middle" font-family="Songti SC, Noto Serif SC, serif" font-size="72" font-weight="900" fill="#123d31">發</text>
+  <circle cx="360" cy="342" r="54" fill="#ffd889"/>
+  <circle cx="360" cy="342" r="34" fill="#0f3a2d"/>
+  <circle cx="360" cy="342" r="16" fill="#ffd889"/>
+</svg>

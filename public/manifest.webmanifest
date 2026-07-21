@@ -1,0 +1,19 @@
+{
+  "name": "巷口麻将",
+  "short_name": "巷口麻将",
+  "description": "支持垃圾胡计分的本地四人网页麻将。",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#0a1711",
+  "theme_color": "#123d31",
+  "icons": [
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
