@@ -87,5 +87,5 @@ export function tileColorClass(code: TileCode): string {
 }
 
 export function tileAssetPath(code: TileCode): string {
-  return `/tiles/${code}.svg`;
+  return `${import.meta.env.BASE_URL}tiles/${code}.svg`;
 }

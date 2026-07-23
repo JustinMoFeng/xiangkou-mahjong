@@ -2,7 +2,15 @@
 
 一个本地四人网页麻将 MVP。第一版目标是快速能玩：你坐下方，三名机器人陪打，支持摸牌、出牌、自摸、点炮胡、流局和基础倍率结算。
 
-首页可以选择玩法：**经典巷口麻将** 或 **川麻·血战到底**。两套规则引擎相互独立，进度分别保存在本机浏览器。也可以直接用 URL 进入：`?mode=classic`、`?mode=sichuan`。
+首页可以选择玩法：**巷口麻将** 或 **川麻·血战到底**。两套规则引擎相互独立，进度分别保存在本机浏览器。
+
+## 入口
+
+- `/`：游戏大厅，选择麻将玩法。
+- `/game/xiangkou`：巷口麻将开桌方式，当前开放 `人机练习`，`朋友房间` 敬请期待。
+- `/play/xiangkou/bot`：巷口麻将人机牌桌。
+- `/game/sichuan`：川麻·血战到底牌桌。
+- 兼容旧入口：`/classic`、`/sichuan`、`?mode=classic`、`?mode=sichuan`。
 
 ## 规则（经典）
 
@@ -50,6 +58,8 @@ npm run build
 ```
 
 打包产物在 `dist/`，可直接部署到 Vercel、Netlify、Cloudflare Pages、GitHub Pages、nginx 静态目录或任意静态网站服务。
+
+GitHub Actions 会在 `dev` 分支 push 后自动构建并发布到 GitHub Pages。`main` 用作稳定主线，建议通过 PR 合入。
 
 手机建议横屏游玩。支持 PWA manifest 和 service worker，部署到 HTTPS 后，Android 和 iOS Safari 可以通过浏览器“添加到主屏幕”使用。
 

@@ -1,9 +1,11 @@
-const CACHE_NAME = "xiangkou-mahjong-v1";
+const CACHE_NAME = "xiangkou-mahjong-v2";
+const SCOPE_PATH = new URL(self.registration.scope).pathname;
+const scopedPath = (path) => `${SCOPE_PATH}${path}`.replace(/\/{2,}/g, "/");
 const CORE_ASSETS = [
-  "/",
-  "/index.html",
-  "/manifest.webmanifest",
-  "/icons/icon.svg",
+  scopedPath(""),
+  scopedPath("index.html"),
+  scopedPath("manifest.webmanifest"),
+  scopedPath("icons/icon.svg"),
 ];
 
 self.addEventListener("install", (event) => {
@@ -25,6 +27,22 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
 
+  if (event.request.mode === "navigate") {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(scopedPath(""), copy.clone());
+            cache.put(scopedPath("index.html"), copy);
+          });
+          return response;
+        })
+        .catch(() => caches.match(scopedPath("index.html"))),
+    );
+    return;
+  }
+
   event.respondWith(
     caches.match(event.request).then((cached) => {
       if (cached) return cached;
@@ -35,7 +53,7 @@ self.addEventListener("fetch", (event) => {
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
           return response;
         })
-        .catch(() => caches.match("/index.html"));
+        .catch(() => caches.match(scopedPath("index.html")));
     }),
   );
 });

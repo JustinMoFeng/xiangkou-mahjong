@@ -6,7 +6,7 @@ export type AudioEvent =
   | { kind: "win" };
 
 const NUMBER_WORDS = ["", "一", "二", "三", "四", "五", "六", "七", "八", "九"] as const;
-const BGM_PATH = "/audio/mahjong-bgm.mp3";
+const BGM_PATH = `${import.meta.env.BASE_URL}audio/mahjong-bgm.mp3`;
 
 export function getAudioEvents(previous: GameState | undefined, current: GameState): AudioEvent[] {
   const events: AudioEvent[] = [];

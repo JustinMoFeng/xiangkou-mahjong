@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 test("sichuan mode: choose missing suit, then play begins", async ({ page }) => {
-  await page.goto("/sichuan");
+  await page.goto("/game/sichuan");
 
   // Missing-suit overlay appears first.
   await expect(page.getByLabel("定缺")).toBeVisible();
@@ -28,7 +28,7 @@ test("sichuan mode: choose missing suit, then play begins", async ({ page }) => 
 });
 
 test("sichuan mode: shares the classic table layout and Sichuan branding", async ({ page }) => {
-  await page.goto("/sichuan");
+  await page.goto("/game/sichuan");
   await page.getByTestId("sc-missing-m").click();
 
   await expect(page.getByLabel("川麻牌桌")).toBeVisible();
@@ -44,13 +44,24 @@ test("home page lets you pick a mode and routes by path", async ({ page }) => {
   await page.reload();
 
   await expect(page.locator(".home-header h1")).toHaveText("巷口麻将");
+  await page.getByRole("button", { name: "选择巷口麻将" }).click();
+  await expect(page).toHaveURL(/\/game\/xiangkou$/);
+  await expect(page.getByRole("heading", { name: "选择开桌方式" })).toBeVisible();
+  await page.getByRole("button", { name: "进入人机练习" }).click();
+  await expect(page).toHaveURL(/\/play\/xiangkou\/bot$/);
+  await expect(page.getByLabel("巷口麻将牌桌")).toBeVisible();
+
+  await page.goto("/");
   await page.getByRole("button", { name: /川麻/ }).click();
-  await expect(page).toHaveURL(/\/sichuan$/);
+  await expect(page).toHaveURL(/\/game\/sichuan$/);
   await expect(page.getByLabel("定缺")).toBeVisible();
 });
 
-test("classic mode is reachable at /classic", async ({ page }) => {
+test("legacy game routes remain reachable", async ({ page }) => {
   await page.goto("/classic");
   await expect(page.getByLabel("你的手牌")).toBeVisible();
   await expect(page.locator(".top-bar h1")).toHaveText("巷口麻将");
+
+  await page.goto("/sichuan");
+  await expect(page.getByLabel("定缺")).toBeVisible();
 });
