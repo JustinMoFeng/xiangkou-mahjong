@@ -1,4 +1,4 @@
-import { AlignJustify, Bot, Copy, House, Pause, Play, RotateCcw, Sparkles, Users, Volume2, VolumeX } from "lucide-react";
+import { AlignJustify, Bot, Copy, Home as HomeIcon, House, Pause, Play, RotateCcw, Sparkles, Users, Volume2, VolumeX } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import {
   arrangeHand,
@@ -32,7 +32,7 @@ const windLabels = {
 
 const relationLabels = ["本家", "下家", "对家", "上家"] as const;
 
-function App() {
+function App({ onBackHome }: { onBackHome?: () => void } = {}) {
   const scenario = new URLSearchParams(window.location.search).get("scenario");
   const [state, setState] = useState<GameState>(() => {
     if (scenario === "multi-chow") return createMultiChowScenario();
@@ -167,7 +167,7 @@ function App() {
         </div>
       </div>
       <section className="game-frame" aria-label="巷口麻将牌桌">
-        <Header state={state} audioEnabled={audioEnabled} onPause={pause} onToggleAudio={toggleAudio} />
+        <Header state={state} audioEnabled={audioEnabled} onPause={pause} onToggleAudio={toggleAudio} onBackHome={onBackHome} />
 
         <section className="mahjong-table" aria-label="四人麻将桌">
           <div className="table-felt" aria-hidden="true" />
@@ -262,11 +262,13 @@ function Header({
   audioEnabled,
   onPause,
   onToggleAudio,
+  onBackHome,
 }: {
   state: GameState;
   audioEnabled: boolean;
   onPause: () => void;
   onToggleAudio: () => void;
+  onBackHome?: () => void;
 }) {
   const human = state.players[0];
 
@@ -304,6 +306,11 @@ function Header({
         >
           {audioEnabled ? <Volume2 size={18} /> : <VolumeX size={18} />}
         </button>
+        {onBackHome ? (
+          <button className="icon-command" onClick={onBackHome} title="返回首页" aria-label="返回首页">
+            <HomeIcon size={18} />
+          </button>
+        ) : null}
         <button className="icon-command" onClick={onPause} title="暂停" aria-label="暂停">
           <Pause size={18} />
         </button>
