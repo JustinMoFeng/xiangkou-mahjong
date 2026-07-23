@@ -26,6 +26,10 @@
   margin-bottom: clamp(20px, 3vw, 32px);
 }
 
+.home-header--split {
+  position: relative;
+}
+
 .home-eyebrow {
   margin: 0 0 4px;
   color: rgba(246, 239, 225, 0.66);
@@ -79,7 +83,13 @@
   background: linear-gradient(135deg, rgba(150, 32, 26, 0.55), rgba(72, 14, 12, 0.72));
 }
 
-.home-card:hover {
+.home-card--locked {
+  cursor: not-allowed;
+  opacity: 0.72;
+  background: linear-gradient(135deg, rgba(70, 70, 65, 0.46), rgba(18, 22, 18, 0.68));
+}
+
+.home-card:not(:disabled):hover {
   transform: translateY(-3px);
   border-color: rgba(255, 216, 137, 0.72);
   box-shadow: 0 16px 34px rgba(0, 0, 0, 0.34);
@@ -113,9 +123,61 @@
   color: rgba(255, 216, 137, 0.8);
 }
 
+.home-card__badge {
+  justify-self: end;
+  padding: 5px 9px;
+  border: 1px solid rgba(255, 247, 227, 0.18);
+  border-radius: 999px;
+  color: rgba(246, 239, 225, 0.68);
+  background: rgba(255, 247, 227, 0.08);
+  font-size: 0.72rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.home-back {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid rgba(255, 247, 227, 0.18);
+  border-radius: 8px;
+  color: #fff4da;
+  background: rgba(255, 247, 227, 0.08);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.home-back:hover {
+  border-color: rgba(255, 216, 137, 0.68);
+  background: rgba(215, 163, 72, 0.14);
+}
+
 .home-footer {
   margin-top: 20px;
   text-align: center;
   color: rgba(246, 239, 225, 0.52);
   font-size: 0.78rem;
+}
+
+@media (max-width: 640px) {
+  .home-header--split {
+    padding-top: 38px;
+  }
+
+  .home-card {
+    grid-template-columns: auto 1fr;
+  }
+
+  .home-card__go,
+  .home-card__badge {
+    grid-column: 2;
+    justify-self: start;
+  }
 }
