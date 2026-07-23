@@ -1,4 +1,4 @@
-import { AlignJustify, Bot, Copy, Home as HomeIcon, House, Pause, Play, RotateCcw, Sparkles, Users, Volume2, VolumeX } from "lucide-react";
+import { AlignJustify, Bot, Copy, Home as HomeIcon, House, Play, RotateCcw, Settings, Sparkles, Users, Volume2, VolumeX } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import {
   arrangeHand,
@@ -12,6 +12,8 @@ import {
   createNewGame,
   createNextRound,
   createRiverLayoutScenario,
+  DEFAULT_PLAYER_NAMES,
+  normalizePlayerNames,
   discardTile,
   drawForCurrentSeat,
   passClaim,
@@ -19,9 +21,9 @@ import {
 } from "./game/engine";
 import { getAudioEvents, MahjongAudio } from "./game/audio";
 import { checkStandardWin } from "./game/rules";
-import { clearSavedGame, loadSavedGame, saveGame } from "./game/storage";
+import { clearSavedGame, loadSavedGame, loadTableProfile, saveGame, saveTableProfile } from "./game/storage";
 import { sortTiles, tileAssetPath, tileColorClass } from "./game/tiles";
-import type { ClaimOption, GameState, Meld, Player, Tile } from "./game/types";
+import type { ClaimOption, GameState, Meld, Player, PlayerNames, Tile } from "./game/types";
 
 const windLabels = {
   east: "东",
@@ -34,15 +36,16 @@ const relationLabels = ["本家", "下家", "对家", "上家"] as const;
 
 function App({ onBackHome }: { onBackHome?: () => void } = {}) {
   const scenario = new URLSearchParams(window.location.search).get("scenario");
+  const [playerNames, setPlayerNames] = useState<PlayerNames>(() => loadTableProfile().names);
   const [state, setState] = useState<GameState>(() => {
     if (scenario === "multi-chow") return createMultiChowScenario();
     if (scenario === "bot-pong") return createBotPongScenario();
     if (scenario === "river-layout") return createRiverLayoutScenario();
     if (scenario === "meld-layout") return createMeldLayoutScenario();
-    return loadSavedGame() ?? createNewGame();
+    return loadSavedGame() ?? createNewGame(Date.now(), undefined, 1, playerNames);
   });
   const [highlightedTileIds, setHighlightedTileIds] = useState<string[]>([]);
-  const [isPaused, setIsPaused] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [audioEnabled, setAudioEnabled] = useState(false);
   const audioRef = useRef<MahjongAudio>();
   const previousStateRef = useRef<GameState>();
@@ -60,7 +63,7 @@ function App({ onBackHome }: { onBackHome?: () => void } = {}) {
   }, [scenario, state]);
 
   useEffect(() => {
-    if (isPaused || state.phase !== "playing" || state.pendingClaim || currentPlayer.type !== "bot") {
+    if (isSettingsOpen || state.phase !== "playing" || state.pendingClaim || currentPlayer.type !== "bot") {
       return;
     }
 
@@ -70,10 +73,10 @@ function App({ onBackHome }: { onBackHome?: () => void } = {}) {
     }, delay);
 
     return () => window.clearTimeout(timer);
-  }, [currentPlayer.hand.length, currentPlayer.type, isPaused, state.phase, state.pendingClaim, state.turn]);
+  }, [currentPlayer.hand.length, currentPlayer.type, isSettingsOpen, state.phase, state.pendingClaim, state.turn]);
 
   useEffect(() => {
-    if (isPaused || state.phase !== "playing" || state.pendingClaim || state.currentSeat !== 0 || human.hand.length % 3 !== 1) {
+    if (isSettingsOpen || state.phase !== "playing" || state.pendingClaim || state.currentSeat !== 0 || human.hand.length % 3 !== 1) {
       return;
     }
 
@@ -82,11 +85,11 @@ function App({ onBackHome }: { onBackHome?: () => void } = {}) {
     }, 650);
 
     return () => window.clearTimeout(timer);
-  }, [human.hand.length, isPaused, state.currentSeat, state.pendingClaim, state.phase, state.turn]);
+  }, [human.hand.length, isSettingsOpen, state.currentSeat, state.pendingClaim, state.phase, state.turn]);
 
   useEffect(() => {
     setHighlightedTileIds([]);
-  }, [humanPendingClaim?.id, isPaused]);
+  }, [humanPendingClaim?.id, isSettingsOpen]);
 
   useEffect(() => {
     const events = getAudioEvents(previousStateRef.current, state);
@@ -95,24 +98,36 @@ function App({ onBackHome }: { onBackHome?: () => void } = {}) {
   }, [state]);
 
   function restart() {
-    const next = createNewGame();
+    const next = createNewGame(Date.now(), undefined, 1, playerNames);
     clearSavedGame();
-    setIsPaused(false);
+    setIsSettingsOpen(false);
     setState(next);
   }
 
   function nextRound() {
     const next = createNextRound(state);
-    setIsPaused(false);
+    setIsSettingsOpen(false);
     setState(next);
   }
 
   function resume() {
-    setIsPaused(false);
+    setIsSettingsOpen(false);
   }
 
-  function pause() {
-    setIsPaused(true);
+  function openSettings() {
+    setIsSettingsOpen(true);
+  }
+
+  function renamePlayers(names: readonly string[]) {
+    const profile = saveTableProfile(names);
+    setPlayerNames(profile.names);
+    setState((current) => ({
+      ...current,
+      players: current.players.map((player) => ({
+        ...player,
+        name: profile.names[player.seat],
+      })),
+    }));
   }
 
   async function toggleAudio() {
@@ -167,7 +182,13 @@ function App({ onBackHome }: { onBackHome?: () => void } = {}) {
         </div>
       </div>
       <section className="game-frame" aria-label="巷口麻将牌桌">
-        <Header state={state} audioEnabled={audioEnabled} onPause={pause} onToggleAudio={toggleAudio} onBackHome={onBackHome} />
+        <Header
+          state={state}
+          audioEnabled={audioEnabled}
+          onOpenSettings={openSettings}
+          onToggleAudio={toggleAudio}
+          onBackHome={onBackHome}
+        />
 
         <section className="mahjong-table" aria-label="四人麻将桌">
           <div className="table-felt" aria-hidden="true" />
@@ -197,7 +218,7 @@ function App({ onBackHome }: { onBackHome?: () => void } = {}) {
                 <button
                   key={tile.id}
                   className={`tile-button ${human.drawnTileId === tile.id ? "tile-button--drawn" : ""}`}
-                  disabled={isPaused || state.phase !== "playing" || state.currentSeat !== 0 || Boolean(state.pendingClaim)}
+                  disabled={isSettingsOpen || state.phase !== "playing" || state.currentSeat !== 0 || Boolean(state.pendingClaim)}
                   onClick={() => onDiscard(tile)}
                   title={`打出${tile.label}`}
                   data-testid={human.drawnTileId === tile.id ? "drawn-tile" : "hand-tile"}
@@ -251,7 +272,15 @@ function App({ onBackHome }: { onBackHome?: () => void } = {}) {
         </section>
 
         {state.winner ? <ResultOverlay state={state} onRestart={restart} onNextRound={nextRound} /> : null}
-        {isPaused ? <PauseOverlay state={state} onResume={resume} onRestart={restart} /> : null}
+        {isSettingsOpen ? (
+          <SettingsOverlay
+            state={state}
+            onRenamePlayers={renamePlayers}
+            onResetNames={() => renamePlayers(DEFAULT_PLAYER_NAMES)}
+            onResume={resume}
+            onRestart={restart}
+          />
+        ) : null}
       </section>
     </main>
   );
@@ -260,13 +289,13 @@ function App({ onBackHome }: { onBackHome?: () => void } = {}) {
 function Header({
   state,
   audioEnabled,
-  onPause,
+  onOpenSettings,
   onToggleAudio,
   onBackHome,
 }: {
   state: GameState;
   audioEnabled: boolean;
-  onPause: () => void;
+  onOpenSettings: () => void;
   onToggleAudio: () => void;
   onBackHome?: () => void;
 }) {
@@ -281,7 +310,7 @@ function Header({
 
       <div className="table-chips">
         <div className="score-chip" aria-label="你的点数">
-          你 {human.score.toLocaleString()} 点
+          {human.name} {human.score.toLocaleString()} 点
         </div>
         <div className="rule-chip">
           <Sparkles size={16} />
@@ -311,8 +340,8 @@ function Header({
             <HomeIcon size={18} />
           </button>
         ) : null}
-        <button className="icon-command" onClick={onPause} title="暂停" aria-label="暂停">
-          <Pause size={18} />
+        <button className="icon-command" onClick={onOpenSettings} title="设置" aria-label="设置">
+          <Settings size={18} />
         </button>
       </div>
     </header>
@@ -541,41 +570,117 @@ function ResultOverlay({
   );
 }
 
-function PauseOverlay({
+function SettingsOverlay({
   state,
+  onRenamePlayers,
+  onResetNames,
   onResume,
   onRestart,
 }: {
   state: GameState;
+  onRenamePlayers: (names: readonly string[]) => void;
+  onResetNames: () => void;
   onResume: () => void;
   onRestart: () => void;
 }) {
+  const [activeTab, setActiveTab] = useState<"general" | "names">("general");
+  const [draftNames, setDraftNames] = useState<PlayerNames>(() => state.players.map((player) => player.name) as PlayerNames);
+  const hasNameChanges = draftNames.some((name, index) => name.trim() !== state.players[index].name);
+
+  function updateDraftName(index: number, value: string) {
+    setDraftNames((current) => current.map((name, nameIndex) => (nameIndex === index ? value : name)) as PlayerNames);
+  }
+
+  function saveNames() {
+    const normalized = normalizePlayerNames(draftNames);
+    setDraftNames(normalized);
+    onRenamePlayers(normalized);
+  }
+
+  function resetNames() {
+    const defaults = [...DEFAULT_PLAYER_NAMES] as PlayerNames;
+    setDraftNames(defaults);
+    onResetNames();
+  }
+
   return (
-    <div className="result-backdrop" role="dialog" aria-modal="true" aria-label="暂停面板">
-      <section className="result-card pause-card">
-        <p className="eyebrow">牌局已暂停</p>
+    <div className="result-backdrop" role="dialog" aria-modal="true" aria-label="牌桌设置">
+      <section className="result-card settings-card">
+        <p className="eyebrow">牌桌设置</p>
         <h2>第 {state.roundNumber} 局</h2>
-        <div className="pause-scoreboard">
-          {state.players.map((player) => (
-            <div key={player.seat}>
-              <span>{relationLabels[player.seat]}</span>
-              <strong>{player.score.toLocaleString()} 点</strong>
+        <div className="settings-tabs" role="tablist" aria-label="设置页">
+          <button
+            className={activeTab === "general" ? "is-active" : ""}
+            role="tab"
+            aria-selected={activeTab === "general"}
+            onClick={() => setActiveTab("general")}
+          >
+            通用
+          </button>
+          <button
+            className={activeTab === "names" ? "is-active" : ""}
+            role="tab"
+            aria-selected={activeTab === "names"}
+            onClick={() => setActiveTab("names")}
+          >
+            改名
+          </button>
+        </div>
+
+        {activeTab === "general" ? (
+          <div className="settings-page" role="tabpanel" aria-label="通用设置">
+            <div className="pause-scoreboard">
+              {state.players.map((player) => (
+                <div key={player.seat}>
+                  <span>
+                    {relationLabels[player.seat]} · {player.name}
+                  </span>
+                  <strong>{player.score.toLocaleString()} 点</strong>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-        <p className="pattern-note">
-          刷新页面会恢复当前局。整场暂按 25000 点起算，任意一家点数归零或以下时结束；未归零时每局结算后可进入下一局。
-        </p>
-        <div className="result-actions">
-          <button className="primary-command" onClick={onResume}>
-            <Play size={18} />
-            继续
-          </button>
-          <button className="secondary-command" onClick={onRestart}>
-            <RotateCcw size={18} />
-            重开本场
-          </button>
-        </div>
+            <p className="pattern-note">
+              刷新页面会恢复当前局。整场暂按 25000 点起算，任意一家点数归零或以下时结束；未归零时每局结算后可进入下一局。
+            </p>
+            <div className="result-actions">
+              <button className="primary-command" onClick={onResume}>
+                <Play size={18} />
+                继续
+              </button>
+              <button className="secondary-command" onClick={onRestart}>
+                <RotateCcw size={18} />
+                重开本场
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="settings-page" role="tabpanel" aria-label="改名设置">
+            <div className="name-editor" aria-label="改名">
+              {state.players.map((player) => (
+                <label key={player.seat} className="name-editor-row">
+                  <span>
+                    {relationLabels[player.seat]} · {windLabels[player.wind]}风
+                  </span>
+                  <input
+                    value={draftNames[player.seat]}
+                    maxLength={16}
+                    onChange={(event) => updateDraftName(player.seat, event.target.value)}
+                    aria-label={`${relationLabels[player.seat]}名字`}
+                  />
+                </label>
+              ))}
+            </div>
+            <div className="name-editor-actions">
+              <button className="primary-command" disabled={!hasNameChanges} onClick={saveNames}>
+                保存名字
+              </button>
+              <button className="secondary-command" onClick={resetNames}>
+                恢复默认
+              </button>
+            </div>
+            <p className="pattern-note">名字会保存在本机，刷新、下一局和重开本场都会继续使用。</p>
+          </div>
+        )}
       </section>
     </div>
   );

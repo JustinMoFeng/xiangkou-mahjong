@@ -18,6 +18,7 @@ export type Tile = {
 };
 
 export type Seat = 0 | 1 | 2 | 3;
+export type PlayerNames = [string, string, string, string];
 export type SeatType = "human" | "bot" | "remote";
 export type RoundPhase = "playing" | "finished";
 export type GameOverReason = "bankrupt";

@@ -710,8 +710,46 @@ button:disabled {
   margin: 0 0 18px;
 }
 
-.pause-card h2 {
+.pause-card h2,
+.settings-card h2 {
   margin-bottom: 12px;
+}
+
+.settings-card {
+  width: min(560px, 100%);
+}
+
+.settings-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  margin: 10px 0 12px;
+  padding: 4px;
+  border: 1px solid rgba(255, 247, 227, 0.12);
+  border-radius: 8px;
+  background: rgba(5, 18, 13, 0.34);
+}
+
+.settings-tabs button {
+  min-height: 34px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(245, 240, 231, 0.7);
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.settings-tabs button.is-active {
+  background: rgba(255, 216, 137, 0.18);
+  color: #ffd889;
+}
+
+.settings-page {
+  display: grid;
+  gap: 10px;
 }
 
 .pause-scoreboard {
@@ -738,6 +776,51 @@ button:disabled {
 .pause-scoreboard strong {
   color: #fff7e3;
   font-size: 0.95rem;
+}
+
+.name-editor {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 10px;
+  border: 1px solid rgba(215, 163, 72, 0.24);
+  border-radius: 8px;
+  background: rgba(5, 18, 13, 0.3);
+}
+
+.name-editor-row {
+  display: grid;
+  grid-template-columns: 86px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+
+.name-editor-row span {
+  color: rgba(245, 240, 231, 0.62);
+  font-size: 0.72rem;
+}
+
+.name-editor-row input {
+  min-width: 0;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid rgba(255, 247, 227, 0.16);
+  border-radius: 8px;
+  background: rgba(255, 247, 227, 0.08);
+  color: #fff7e3;
+  font: inherit;
+  outline: none;
+}
+
+.name-editor-row input:focus {
+  border-color: rgba(255, 216, 137, 0.72);
+  box-shadow: 0 0 0 2px rgba(255, 216, 137, 0.12);
+}
+
+.name-editor-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 @media (max-width: 860px) and (orientation: portrait) {
@@ -2060,8 +2143,23 @@ body {
     margin: 5px 0;
   }
 
-  .pause-card h2 {
+  .pause-card h2,
+  .settings-card h2 {
     margin-bottom: 3px;
+  }
+
+  .settings-tabs {
+    margin: 4px 0;
+    padding: 3px;
+  }
+
+  .settings-tabs button {
+    min-height: 25px;
+    font-size: 0.68rem;
+  }
+
+  .settings-page {
+    gap: 5px;
   }
 
   .pause-scoreboard {
@@ -2079,6 +2177,30 @@ body {
 
   .pause-scoreboard strong {
     font-size: 0.72rem;
+  }
+
+  .name-editor {
+    gap: 4px;
+    padding: 6px;
+  }
+
+  .name-editor-row {
+    grid-template-columns: 70px minmax(0, 1fr);
+    gap: 6px;
+  }
+
+  .name-editor-row span {
+    font-size: 0.58rem;
+  }
+
+  .name-editor-row input {
+    height: 26px;
+    padding: 0 7px;
+    font-size: 0.72rem;
+  }
+
+  .name-editor-actions {
+    gap: 5px;
   }
 
   .pattern-note {
