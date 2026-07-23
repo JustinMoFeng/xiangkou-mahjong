@@ -1,5 +1,5 @@
 import { AlignJustify, Bot, Home as HomeIcon, Pause, Play, RotateCcw, Sparkles, Trophy } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   arrangeHand,
   canCurrentHumanSelfWin,
@@ -51,7 +51,6 @@ export default function SichuanApp({ onBackHome }: { onBackHome?: () => void }) 
     saveGame(state);
   }, [state]);
 
-  // Bot turns (draw or discard) with a small delay.
   useEffect(() => {
     if (isPaused || state.phase !== "playing" || state.pendingClaim || currentPlayer.type !== "bot" || currentPlayer.hasWon) {
       return;
@@ -63,7 +62,6 @@ export default function SichuanApp({ onBackHome }: { onBackHome?: () => void }) 
     return () => window.clearTimeout(timer);
   }, [currentPlayer.type, currentPlayer.hasWon, isPaused, state.awaitingDiscard, state.pendingClaim, state.phase, state.turn]);
 
-  // Human auto-draw when it becomes their turn.
   useEffect(() => {
     if (
       isPaused ||
@@ -137,45 +135,45 @@ export default function SichuanApp({ onBackHome }: { onBackHome?: () => void }) 
   const winnerCount = state.players.filter((player) => player.hasWon).length;
 
   return (
-    <main className="sc-shell">
-      <div className="sc-rotate" aria-label="横屏提示">
+    <main className="app-shell sc-theme">
+      <div className="rotate-device" aria-label="横屏提示">
         <div>
           <strong>请横屏游玩</strong>
           <span>川麻牌桌需要横向空间，旋转手机后继续当前牌局。</span>
         </div>
       </div>
-      <section className="sc-frame" aria-label="川麻牌桌">
-        <SichuanHeader state={state} onPause={() => setIsPaused(true)} onBackHome={onBackHome} />
+      <section className="game-frame" aria-label="川麻牌桌">
+        <Header state={state} onPause={() => setIsPaused(true)} onBackHome={onBackHome} />
 
-        <section className="sc-table" aria-label="四人川麻桌">
-          <div className="sc-felt" aria-hidden="true" />
-          <SeatView player={state.players[2]} position="top" active={state.currentSeat === 2} />
-          <SeatView player={state.players[3]} position="left" active={state.currentSeat === 3} />
-          <SeatView player={state.players[1]} position="right" active={state.currentSeat === 1} />
+        <section className="mahjong-table" aria-label="四人川麻桌">
+          <div className="table-felt" aria-hidden="true" />
+          <TableSeat player={state.players[2]} position="top" active={state.currentSeat === 2} />
+          <TableSeat player={state.players[3]} position="left" active={state.currentSeat === 3} />
+          <TableSeat player={state.players[1]} position="right" active={state.currentSeat === 1} />
 
-          <section className="sc-river" aria-label="四家河牌">
+          <section className="river-board" aria-label="四家河牌">
             <RiverZone player={state.players[2]} position="top" lastDiscard={state.lastDiscard} />
             <RiverZone player={state.players[3]} position="left" lastDiscard={state.lastDiscard} />
             <RiverZone player={state.players[1]} position="right" lastDiscard={state.lastDiscard} />
             <RiverZone player={state.players[0]} position="bottom" lastDiscard={state.lastDiscard} />
-            <div className="sc-center">
-              <div className="sc-wall">余牌 {state.wall.length}</div>
-              {winnerCount > 0 ? <div className="sc-winners">已胡 {winnerCount} 家 · 血战继续</div> : null}
-              <div className="sc-recent" aria-live="polite">
-                {state.recentAction}
-              </div>
+            <div className="wall-counter">
+              <span>余牌 {state.wall.length}</span>
+            </div>
+            {winnerCount > 0 ? <div className="sc-winners-chip">已胡 {winnerCount} 家 · 血战继续</div> : null}
+            <div className="recent-action" aria-live="polite">
+              <span>{state.recentAction}</span>
             </div>
           </section>
 
-          <section className={`sc-human ${state.currentSeat === 0 && !human.hasWon ? "is-active" : ""}`} aria-label="你的手牌">
-            <SeatStatus player={human} active={state.currentSeat === 0} />
-            <div className="sc-hand-row">
+          <section className={`human-area ${state.currentSeat === 0 && !human.hasWon ? "is-active" : ""}`} aria-label="你的手牌">
+            <PlayerStatus player={human} active={state.currentSeat === 0} />
+            <div className="hand-row">
               <MeldRow melds={human.melds} />
               {human.hand.map((tile) => (
                 <button
                   key={tile.id}
-                  className={`sc-tile-btn ${human.drawnTileId === tile.id ? "sc-tile-btn--drawn" : ""} ${
-                    tile.suit === human.missingSuit ? "sc-tile-btn--missing" : ""
+                  className={`tile-button ${human.drawnTileId === tile.id ? "tile-button--drawn" : ""} ${
+                    tile.suit === human.missingSuit ? "tile-button--missing" : ""
                   }`}
                   disabled={
                     isPaused ||
@@ -195,11 +193,11 @@ export default function SichuanApp({ onBackHome }: { onBackHome?: () => void }) 
             </div>
           </section>
 
-          <div className="sc-command-bar" aria-label="操作区">
+          <div className="command-bar" aria-label="操作区">
             {humanPendingClaim ? (
               <>
                 {humanPendingClaim.options.some((option) => option.action === "win") ? (
-                  <button className="sc-cmd sc-cmd--primary" onClick={onClaimWin} data-testid="sc-claim-win">
+                  <button className="primary-command" onClick={onClaimWin} data-testid="sc-claim-win">
                     <Sparkles size={18} />
                     {humanPendingClaim.options.find((option) => option.action === "win")?.label ?? "胡"}
                   </button>
@@ -209,19 +207,19 @@ export default function SichuanApp({ onBackHome }: { onBackHome?: () => void }) 
                   onSelect={onClaimMeld}
                   onPreview={setHighlightedTileIds}
                 />
-                <button className="sc-cmd" onClick={onPassClaim} data-testid="sc-pass">
+                <button className="secondary-command" onClick={onPassClaim} data-testid="sc-pass">
                   跳过
                 </button>
               </>
             ) : (
               <>
-                <button className="sc-cmd sc-cmd--primary" disabled={!humanCanSelfWin} onClick={onSelfDraw}>
+                <button className="primary-command" disabled={!humanCanSelfWin} onClick={onSelfDraw}>
                   <Sparkles size={18} />
                   自摸
                 </button>
                 <div className="sc-kong-wrap">
                   <button
-                    className="sc-cmd"
+                    className="secondary-command"
                     disabled={kongCodes.length === 0}
                     onClick={() => setKongMenuOpen((open) => !open)}
                   >
@@ -238,9 +236,9 @@ export default function SichuanApp({ onBackHome }: { onBackHome?: () => void }) 
                     </div>
                   ) : null}
                 </div>
-                <button className="sc-cmd" onClick={() => setState((current) => arrangeHand(current, 0))}>
+                <button className="secondary-command" onClick={() => setState((current) => arrangeHand(current, 0))}>
                   <AlignJustify size={18} />
-                  理牌
+                  整理牌
                 </button>
               </>
             )}
@@ -257,7 +255,7 @@ export default function SichuanApp({ onBackHome }: { onBackHome?: () => void }) 
   );
 }
 
-function SichuanHeader({
+function Header({
   state,
   onPause,
   onBackHome,
@@ -268,29 +266,33 @@ function SichuanHeader({
 }) {
   const human = state.players[0];
   return (
-    <header className="sc-top">
+    <header className="top-bar">
       <div>
-        <p className="sc-eyebrow">血战到底 · 第 {state.roundNumber} 局</p>
+        <p className="eyebrow">血战到底 · 第 {state.roundNumber} 局</p>
         <h1>川麻</h1>
       </div>
-      <div className="sc-chips">
-        <div className="sc-score-chip">你 {human.score} 分</div>
-        <div className="sc-rule-chip">
+
+      <div className="table-chips">
+        <div className="score-chip" aria-label="你的点数">
+          你 {human.score} 分
+        </div>
+        <div className="rule-chip">
           <Sparkles size={16} />
           缺一门 · 番数封顶 8
         </div>
       </div>
-      <div className="sc-actions">
-        <button className="sc-mode is-active">
+
+      <div className="mode-actions">
+        <button className="mode-button mode-button--active">
           <Bot size={17} />
           人机血战
         </button>
         {onBackHome ? (
-          <button className="sc-icon" onClick={onBackHome} title="返回首页" aria-label="返回首页">
+          <button className="icon-command" onClick={onBackHome} title="返回首页" aria-label="返回首页">
             <HomeIcon size={18} />
           </button>
         ) : null}
-        <button className="sc-icon" onClick={onPause} title="暂停" aria-label="暂停">
+        <button className="icon-command" onClick={onPause} title="暂停" aria-label="暂停">
           <Pause size={18} />
         </button>
       </div>
@@ -298,19 +300,30 @@ function SichuanHeader({
   );
 }
 
-function SeatView({ player, position, active }: { player: Player; position: "top" | "left" | "right"; active: boolean }) {
+function TableSeat({
+  player,
+  position,
+  active,
+}: {
+  player: Player;
+  position: "top" | "left" | "right";
+  active: boolean;
+}) {
   return (
-    <section className={`sc-seat sc-seat--${position} ${active ? "is-active" : ""} ${player.hasWon ? "is-won" : ""}`}>
-      <SeatStatus player={player} active={active} />
-      <div className="sc-seat__rack">
+    <section
+      className={`table-seat table-seat--${position} ${active ? "is-active" : ""} ${player.hasWon ? "sc-seat-won" : ""}`}
+      aria-label={`${player.name}区域`}
+    >
+      <PlayerStatus player={player} active={active} />
+      <div className="table-seat__rack">
         <MeldRow melds={player.melds} compact />
-        <div className="sc-concealed">
+        <div className="concealed-hand" aria-label={`${player.name}手牌`}>
           {player.hasWon ? (
             <span className="sc-won-badge">
-              <Trophy size={14} /> 已胡
+              <Trophy size={13} /> 已胡
             </span>
           ) : (
-            player.hand.map((tile) => <span key={tile.id} className="sc-tile-back" />)
+            player.hand.map((tile) => <span key={tile.id} className="tile-back" />)
           )}
         </div>
       </div>
@@ -328,15 +341,16 @@ function RiverZone({
   lastDiscard?: GameState["lastDiscard"];
 }) {
   const discards = position === "top" || position === "right" ? [...player.discards].reverse() : player.discards;
+
   return (
-    <section className={`sc-river-zone sc-river-zone--${position}`} aria-label={`${player.name}河牌`}>
-      <span className="sc-river-name">
+    <section className={`river-zone river-zone--${position}`} aria-label={`${player.name}河牌`}>
+      <span className="river-zone__name">
         {relationLabels[player.seat]} · {player.name}
         {player.missingSuit ? <em className="sc-miss">缺{SUIT_LABELS[player.missingSuit]}</em> : null}
       </span>
-      <div className="sc-river-tiles">
+      <div className="river-zone__tiles">
         {discards.length === 0 ? (
-          <span className="sc-river-empty">未出牌</span>
+          <span className="river-zone__empty">未出牌</span>
         ) : (
           discards.map((tile) => (
             <TileFace
@@ -352,15 +366,15 @@ function RiverZone({
   );
 }
 
-function SeatStatus({ player, active }: { player: Player; active: boolean }) {
+function PlayerStatus({ player, active }: { player: Player; active: boolean }) {
   return (
-    <div className={`sc-status ${active ? "is-active" : ""}`}>
+    <div className={`player-status ${active ? "is-active" : ""}`}>
       <div>
         <strong>
-          <span className="sc-relation">{relationLabels[player.seat]}</span>
+          <span className="relation-badge">{relationLabels[player.seat]}</span>
           {player.name}
         </strong>
-        {player.missingSuit ? <span className="sc-miss-tag">缺{SUIT_LABELS[player.missingSuit]}</span> : <span>未定缺</span>}
+        <span>{player.missingSuit ? `缺${SUIT_LABELS[player.missingSuit]}` : "未定缺"}</span>
       </div>
       <small>
         {player.score} 分 · {player.hasWon ? "已胡" : `${player.hand.length} 张`}
@@ -371,16 +385,17 @@ function SeatStatus({ player, active }: { player: Player; active: boolean }) {
 
 function MeldRow({ melds, compact = false }: { melds: Meld[]; compact?: boolean }) {
   if (melds.length === 0) {
-    return <div className="sc-meld-row sc-meld-row--empty">无副露</div>;
+    return <div className="meld-row meld-row--empty">无副露</div>;
   }
+
   return (
-    <div className={`sc-meld-row ${compact ? "sc-meld-row--compact" : ""}`} aria-label="副露">
-      {melds.map((meld, index) => (
-        <div className="sc-meld-set" key={`${meld.code}-${index}`}>
-          <span className="sc-meld-label">{meldLabel(meld.kind)}</span>
+    <div className={`meld-row ${compact ? "meld-row--compact" : ""}`} aria-label="副露">
+      {melds.map((meld, meldIndex) => (
+        <div className="meld-set" key={`${meld.code}-${meldIndex}`}>
+          <span className="meld-label">{meldLabel(meld.kind)}</span>
           {meld.tiles.map((tile, tileIndex) =>
             meld.kind === "kong-concealed" && (tileIndex === 0 || tileIndex === 3) ? (
-              <span key={tile.id} className="sc-tile-back sc-tile-back--compact" />
+              <span key={tile.id} className="tile-back tile-back--meld" />
             ) : (
               <TileFace key={tile.id} tile={tile} compact={compact} />
             ),
@@ -403,11 +418,12 @@ function ClaimOptions({
   if (options.length === 0) {
     return null;
   }
+
   return (
-    <div className="sc-claim-options" aria-label="可选组合">
+    <div className="claim-options" aria-label="可选组合">
       {options.map((option) => (
         <button
-          className={`sc-claim sc-claim--${option.action}`}
+          className={`claim-option claim-option--${option.action}`}
           key={option.id}
           onClick={() => onSelect(option.id)}
           onFocus={() => onPreview(option.handTileIds)}
@@ -417,7 +433,7 @@ function ClaimOptions({
           data-testid={`sc-claim-${option.action}`}
         >
           <span>{option.label}</span>
-          <span className="sc-claim__tiles">
+          <span className="claim-option__tiles">
             {option.previewTileCodes.map((code, index) => (
               <img key={`${option.id}-${code}-${index}`} src={tileAssetPath(code)} alt="" draggable={false} />
             ))}
@@ -441,11 +457,11 @@ function TileFace({
 }) {
   return (
     <span
-      className={`sc-tile-face ${tileColorClass(tile.code)} ${compact ? "sc-tile-face--compact" : ""} ${
+      className={`tile-face ${tileColorClass(tile.code)} ${compact ? "tile-face--compact" : ""} ${
         fresh ? "is-fresh" : ""
       } ${highlighted ? "is-highlighted" : ""}`}
     >
-      <img className="sc-tile-img" src={tileAssetPath(tile.code)} alt={tile.label} draggable={false} />
+      <img className="tile-face__image" src={tileAssetPath(tile.code)} alt={tile.label} draggable={false} />
     </span>
   );
 }
@@ -455,12 +471,13 @@ function MissingSuitOverlay({ human, onChoose }: { human: Player; onChoose: (sui
   for (const tile of human.hand) {
     counts[tile.suit] += 1;
   }
+
   return (
-    <div className="sc-backdrop" role="dialog" aria-modal="true" aria-label="定缺">
-      <section className="sc-card sc-card--missing">
-        <p className="sc-eyebrow">开局定缺</p>
+    <div className="result-backdrop" role="dialog" aria-modal="true" aria-label="定缺">
+      <section className="result-card">
+        <p className="eyebrow">开局定缺</p>
         <h2>选择一门要缺的花色</h2>
-        <p className="sc-note">缺门花色不能留在手里，否则不能胡牌；建议缺张数最少的一门。</p>
+        <p className="pattern-note">缺门花色不能留在手里，否则不能胡牌；建议缺张数最少的一门。</p>
         <div className="sc-missing-grid">
           {suitOrder.map((suit) => (
             <button key={suit} className="sc-missing-option" onClick={() => onChoose(suit)} data-testid={`sc-missing-${suit}`}>
@@ -486,10 +503,11 @@ function ResultOverlay({
   onBackHome?: () => void;
 }) {
   const winners = state.players.filter((player) => player.hasWon);
+
   return (
-    <div className="sc-backdrop" role="dialog" aria-modal="true" aria-label="本局结算">
-      <section className="sc-card sc-card--result">
-        <p className="sc-eyebrow">{state.settlement ? "流局结算" : "本局结束"}</p>
+    <div className="result-backdrop" role="dialog" aria-modal="true" aria-label="本局结算">
+      <section className="result-card">
+        <p className="eyebrow">{state.settlement ? "流局结算" : "本局结束"}</p>
         <h2>{winners.length > 0 ? `${winners.length} 家胡牌` : "荒庄"}</h2>
 
         {winners.length > 0 ? (
@@ -518,17 +536,17 @@ function ResultOverlay({
           ))}
         </div>
 
-        <div className="sc-result-actions">
-          <button className="sc-cmd sc-cmd--primary" onClick={onNextRound}>
+        <div className="result-actions">
+          <button className="primary-command" onClick={onNextRound}>
             <Play size={18} />
             下一局
           </button>
-          <button className="sc-cmd" onClick={onRestart}>
+          <button className="secondary-command" onClick={onRestart}>
             <RotateCcw size={18} />
             重开
           </button>
           {onBackHome ? (
-            <button className="sc-cmd" onClick={onBackHome}>
+            <button className="secondary-command" onClick={onBackHome}>
               <HomeIcon size={16} />
               首页
             </button>
@@ -549,11 +567,11 @@ function PauseOverlay({
   onRestart: () => void;
 }) {
   return (
-    <div className="sc-backdrop" role="dialog" aria-modal="true" aria-label="暂停面板">
-      <section className="sc-card sc-card--pause">
-        <p className="sc-eyebrow">牌局已暂停</p>
+    <div className="result-backdrop" role="dialog" aria-modal="true" aria-label="暂停面板">
+      <section className="result-card pause-card">
+        <p className="eyebrow">牌局已暂停</p>
         <h2>第 {state.roundNumber} 局</h2>
-        <div className="sc-pause-scores">
+        <div className="pause-scoreboard">
           {state.players.map((player) => (
             <div key={player.seat}>
               <span>{relationLabels[player.seat]}</span>
@@ -561,13 +579,15 @@ function PauseOverlay({
             </div>
           ))}
         </div>
-        <p className="sc-note">刷新页面会恢复当前局。川麻血战到底：胡牌者亮牌离场，其余继续，直到只剩一家或牌墙摸完。</p>
-        <div className="sc-result-actions">
-          <button className="sc-cmd sc-cmd--primary" onClick={onResume}>
+        <p className="pattern-note">
+          刷新页面会恢复当前局。川麻血战到底：胡牌者亮牌离场，其余继续，直到只剩一家或牌墙摸完。
+        </p>
+        <div className="result-actions">
+          <button className="primary-command" onClick={onResume}>
             <Play size={18} />
             继续
           </button>
-          <button className="sc-cmd" onClick={onRestart}>
+          <button className="secondary-command" onClick={onRestart}>
             <RotateCcw size={18} />
             重开
           </button>

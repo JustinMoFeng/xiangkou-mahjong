@@ -81,9 +81,9 @@ export function tileRankNumber(code: TileCode): number {
 }
 
 export function tileColorClass(code: TileCode): string {
-  if (code.startsWith("m")) return "sc-tile--characters";
-  if (code.startsWith("p")) return "sc-tile--dots";
-  return "sc-tile--bamboos";
+  if (code.startsWith("m")) return "tile--characters";
+  if (code.startsWith("p")) return "tile--dots";
+  return "tile--bamboos";
 }
 
 export function tileAssetPath(code: TileCode): string {
