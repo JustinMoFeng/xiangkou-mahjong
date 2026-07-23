@@ -9,7 +9,7 @@ const landscapeViewports = [
 ];
 
 test("loads real tile images", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?mode=classic");
 
   await expect(page.getByLabel("你的手牌")).toBeVisible();
 
@@ -22,7 +22,7 @@ test("loads real tile images", async ({ page }) => {
 test("desktop table fits the viewport", async ({ page, browserName }) => {
   test.skip(browserName !== "chromium", "viewport fit is checked with the desktop project");
   await page.setViewportSize({ width: 1280, height: 720 });
-  await page.goto("/");
+  await page.goto("/?mode=classic");
 
   const frame = page.locator(".game-frame");
   await expect(frame).toBeVisible();
@@ -32,7 +32,7 @@ test("desktop table fits the viewport", async ({ page, browserName }) => {
 });
 
 test("drawn tile stays at the far right with a gap until the player discards", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?mode=classic");
 
   const hand = page.locator(".hand-row");
   const drawn = page.getByTestId("drawn-tile");
@@ -52,7 +52,7 @@ test("drawn tile stays at the far right with a gap until the player discards", a
 });
 
 test("mobile landscape layout fits without overflow", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?mode=classic");
 
   await expect(page.getByLabel("巷口麻将牌桌")).toBeVisible();
   await expect(page.getByLabel("四家河牌")).toBeVisible();
@@ -175,7 +175,7 @@ test("all supported landscape sizes keep seats, rivers, commands and hand separa
 test("mobile portrait shows rotate prompt instead of squeezed table", async ({ page, browserName }) => {
   test.skip(browserName !== "chromium", "portrait prompt is checked with Chromium viewport override");
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/");
+  await page.goto("/?mode=classic");
 
   await expect(page.getByLabel("横屏提示")).toBeVisible();
   await expect(page.getByLabel("横屏提示")).toContainText("请横屏游玩");
@@ -388,7 +388,7 @@ test("human melds use hand-sized tiles while robot melds match their concealed r
 test("bot discards face their own seat and keep the latest tile glowing", async ({ page }) => {
   test.skip(test.info().project.name !== "desktop", "bot river direction is checked once in Chromium");
   await page.setViewportSize({ width: 932, height: 430 });
-  await page.goto("/");
+  await page.goto("/?mode=classic");
   await page.evaluate(() => window.localStorage.clear());
   await page.reload();
   await page.getByTestId("hand-tile").first().click();
@@ -469,7 +469,7 @@ test("bot discards face their own seat and keep the latest tile glowing", async 
 });
 
 test("normal game persists current round across refresh and exposes pause restart", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?mode=classic");
   await page.evaluate(() => window.localStorage.clear());
   await page.reload();
 
@@ -488,7 +488,7 @@ test("normal game persists current round across refresh and exposes pause restar
 test("pause controls stay visible in extreme landscape height", async ({ page }) => {
   test.skip(test.info().project.name !== "desktop", "the extreme viewport only needs one Chromium project");
   await page.setViewportSize({ width: 802, height: 293 });
-  await page.goto("/");
+  await page.goto("/?mode=classic");
   await page.getByLabel("暂停").click();
 
   const pausePanel = page.getByLabel("暂停面板");
@@ -505,7 +505,7 @@ test("starts when crypto.randomUUID is unavailable", async ({ page }) => {
     });
   });
 
-  await page.goto("/");
+  await page.goto("/?mode=classic");
   await expect(page.getByLabel("四人麻将桌")).toBeVisible();
   await expect(page.getByTestId("drawn-tile")).toHaveCount(1);
 });
