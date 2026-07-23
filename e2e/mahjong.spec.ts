@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import type { Page } from "@playwright/test";
 
 const landscapeViewports = [
   { width: 740, height: 360 },
@@ -7,6 +8,11 @@ const landscapeViewports = [
   { width: 932, height: 430 },
   { width: 1280, height: 720 },
 ];
+
+async function gotoScenario(page: Page, scenario: string) {
+  await page.addInitScript(() => window.localStorage.clear());
+  await page.goto(`/?scenario=${scenario}`, { waitUntil: "domcontentloaded" });
+}
 
 test("loads real tile images", async ({ page }) => {
   await page.goto("/play/xiangkou/bot");
@@ -72,7 +78,7 @@ test("all supported landscape sizes keep seats, rivers, commands and hand separa
 
   for (const viewport of landscapeViewports) {
     await page.setViewportSize(viewport);
-    await page.goto("/?scenario=multi-chow");
+    await gotoScenario(page, "multi-chow");
 
     await expect(page.getByLabel("四人麻将桌")).toBeVisible();
     await expect(page.getByTestId("hand-tile")).toHaveCount(13);
@@ -183,7 +189,7 @@ test("mobile portrait shows rotate prompt instead of squeezed table", async ({ p
 });
 
 test("multiple chow choices are shown and highlight the exact hand tiles", async ({ page }) => {
-  await page.goto("/?scenario=multi-chow");
+  await gotoScenario(page, "multi-chow");
 
   const chowOptions = page.getByTestId("claim-option-chow");
   await expect(chowOptions).toHaveCount(3);
@@ -202,13 +208,13 @@ test("multiple chow choices are shown and highlight the exact hand tiles", async
 });
 
 test("bot can pong from real hand tiles after the player discards", async ({ page }) => {
-  await page.goto("/?scenario=bot-pong");
+  await gotoScenario(page, "bot-pong");
 
   await page.getByTitle("打出红中").click();
-  const rightOpponent = page.getByLabel("南家机器人区域");
+  const rightOpponent = page.getByLabel("阿南区域");
   await expect(rightOpponent.getByLabel("副露")).toContainText("碰");
   await expect(rightOpponent.locator(".table-seat__rack").getByLabel("副露")).toContainText("碰");
-  await expect(page.locator(".recent-action")).toContainText("南家机器人碰了 你 的 红中");
+  await expect(page.locator(".recent-action")).toContainText("阿南碰了 你 的 红中");
 });
 
 test("opponent racks and meld tiles face the correct table direction", async ({ page }) => {
@@ -244,7 +250,7 @@ test("opponent racks and meld tiles face the correct table direction", async ({ 
     };
   });
 
-  await page.goto("/?scenario=multi-chow");
+  await gotoScenario(page, "multi-chow");
   const rackRotations = await readRotations();
   const leftRiverRotation = await page.evaluate(() => {
     const element = document.querySelector(".river-zone--left .tile-face");
@@ -265,9 +271,9 @@ test("opponent racks and meld tiles face the correct table direction", async ({ 
   });
   expect(leftRiverRotation).toBe(90);
 
-  await page.goto("/?scenario=bot-pong");
+  await gotoScenario(page, "bot-pong");
   await page.getByTitle("打出红中").click();
-  await expect(page.getByLabel("南家机器人区域").getByLabel("副露")).toContainText("碰");
+  await expect(page.getByLabel("阿南区域").getByLabel("副露")).toContainText("碰");
   const rightMeldRotation = await page.evaluate(() => {
     const element = document.querySelector(".table-seat--right .meld-row .tile-face");
     if (!element) {
@@ -285,7 +291,7 @@ test("opponent racks and meld tiles face the correct table direction", async ({ 
 test("side rivers run along each player's edge and meld spacing matches concealed tiles", async ({ page }) => {
   test.skip(test.info().project.name !== "desktop", "layout geometry is checked once in Chromium");
   await page.setViewportSize({ width: 932, height: 430 });
-  await page.goto("/?scenario=river-layout");
+  await gotoScenario(page, "river-layout");
 
   const riverLayout = await page.evaluate(() => {
     const rects = (selector: string) =>
@@ -317,9 +323,9 @@ test("side rivers run along each player's edge and meld spacing matches conceale
     rightColumn: true,
   });
 
-  await page.goto("/?scenario=bot-pong");
+  await gotoScenario(page, "bot-pong");
   await page.getByTitle("打出红中").click();
-  await expect(page.getByLabel("南家机器人区域").getByLabel("副露")).toContainText("碰");
+  await expect(page.getByLabel("阿南区域").getByLabel("副露")).toContainText("碰");
 
   const meldLayout = await page.evaluate(() => {
     const rects = (selector: string) =>
@@ -352,7 +358,7 @@ test("side rivers run along each player's edge and meld spacing matches conceale
 test("human melds use hand-sized tiles while robot melds match their concealed racks", async ({ page }) => {
   test.skip(test.info().project.name !== "desktop", "meld geometry is checked once in Chromium");
   await page.setViewportSize({ width: 932, height: 430 });
-  await page.goto("/?scenario=meld-layout");
+  await gotoScenario(page, "meld-layout");
 
   const layout = await page.evaluate(() => {
     const rect = (selector: string) => {
@@ -468,7 +474,7 @@ test("bot discards face their own seat and keep the latest tile glowing", async 
   });
 });
 
-test("normal game persists current round across refresh and exposes pause restart", async ({ page }) => {
+test("normal game persists current round across refresh and exposes settings restart", async ({ page }) => {
   await page.goto("/play/xiangkou/bot");
   await page.evaluate(() => window.localStorage.clear());
   await page.reload();
@@ -479,20 +485,44 @@ test("normal game persists current round across refresh and exposes pause restar
   await expect(page.getByTestId("drawn-tile")).toHaveCount(1);
   await expect(page.getByText("第 1 局开局。垃圾胡已开启")).toBeVisible();
 
-  await page.getByLabel("暂停").click();
-  await expect(page.getByLabel("暂停面板")).toBeVisible();
+  await page.getByLabel("设置").click();
+  await expect(page.getByLabel("牌桌设置")).toBeVisible();
   await expect(page.getByRole("button", { name: "继续" })).toBeVisible();
   await expect(page.getByRole("button", { name: "重开本场" })).toBeVisible();
 });
 
-test("pause controls stay visible in extreme landscape height", async ({ page }) => {
+test("player names can be edited and persist across refresh", async ({ page }) => {
+  await page.goto("/play/xiangkou/bot");
+  await page.evaluate(() => window.localStorage.clear());
+  await page.reload();
+
+  await page.getByLabel("设置").click();
+  const panel = page.getByLabel("牌桌设置");
+  await expect(panel).toBeVisible();
+  await panel.getByRole("tab", { name: "改名" }).click();
+  await panel.getByLabel("本家名字").fill("老板");
+  await panel.getByLabel("下家名字").fill("阿南同学");
+  await panel.getByRole("button", { name: "保存名字" }).click();
+  await expect(panel.getByLabel("本家名字")).toHaveValue("老板");
+
+  await panel.getByRole("tab", { name: "通用" }).click();
+  await panel.getByRole("button", { name: "继续" }).click();
+  await expect(page.getByLabel("你的点数")).toContainText("老板");
+  await expect(page.getByLabel("阿南同学区域")).toContainText("阿南同学");
+
+  await page.reload();
+  await expect(page.getByLabel("你的点数")).toContainText("老板");
+  await expect(page.getByLabel("阿南同学区域")).toContainText("阿南同学");
+});
+
+test("settings controls stay visible in extreme landscape height", async ({ page }) => {
   test.skip(test.info().project.name !== "desktop", "the extreme viewport only needs one Chromium project");
   await page.setViewportSize({ width: 802, height: 293 });
   await page.goto("/play/xiangkou/bot");
-  await page.getByLabel("暂停").click();
+  await page.getByLabel("设置").click();
 
-  const pausePanel = page.getByLabel("暂停面板");
-  await expect(pausePanel).toBeVisible();
+  const settingsPanel = page.getByLabel("牌桌设置");
+  await expect(settingsPanel).toBeVisible();
   await expect(page.getByRole("button", { name: "继续" })).toBeInViewport();
   await expect(page.getByRole("button", { name: "重开本场" })).toBeInViewport();
 });
@@ -585,7 +615,7 @@ test("audio toggle enables tile voice announcements", async ({ page }) => {
     });
   });
 
-  await page.goto("/?scenario=bot-pong");
+  await gotoScenario(page, "bot-pong");
   await page.getByLabel("开启声音").click();
   await expect(page.getByLabel("关闭声音")).toBeVisible();
   await page.getByTitle("打出红中").click();

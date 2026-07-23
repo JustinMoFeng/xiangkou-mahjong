@@ -7,6 +7,7 @@ import type {
   GameState,
   MeldKind,
   Player,
+  PlayerNames,
   Seat,
   Tile,
   TileCode,
@@ -15,14 +16,21 @@ import type {
   WinResult,
 } from "./types";
 
-const PLAYER_NAMES = ["你", "南家机器人", "西家机器人", "北家机器人"] as const;
+export const DEFAULT_PLAYER_NAMES: PlayerNames = ["你", "阿南", "西门杠", "北风客"];
 const WINDS = ["east", "south", "west", "north"] as const;
 const STARTING_SCORE = 25000;
 const HUMAN_SEAT: Seat = 0;
 
-export function createNewGame(seed = Date.now(), carriedScores?: number[], roundNumber = 1): GameState {
+export function normalizePlayerNames(names?: readonly string[]): PlayerNames {
+  return DEFAULT_PLAYER_NAMES.map((fallback, index) => {
+    const trimmed = names?.[index]?.trim();
+    return trimmed ? trimmed.slice(0, 16) : fallback;
+  }) as PlayerNames;
+}
+
+export function createNewGame(seed = Date.now(), carriedScores?: number[], roundNumber = 1, names?: readonly string[]): GameState {
   const wall = shuffleTiles(createWall(), seed);
-  const players = createPlayers();
+  const players = createPlayers(normalizePlayerNames(names));
 
   if (carriedScores) {
     for (const player of players) {
@@ -65,7 +73,12 @@ export function createNewGame(seed = Date.now(), carriedScores?: number[], round
 }
 
 export function createNextRound(state: GameState, seed = Date.now()): GameState {
-  return createNewGame(seed, state.players.map((player) => player.score), state.roundNumber + 1);
+  return createNewGame(
+    seed,
+    state.players.map((player) => player.score),
+    state.roundNumber + 1,
+    state.players.map((player) => player.name),
+  );
 }
 
 export function createMultiChowScenario(): GameState {
@@ -583,8 +596,8 @@ function finishWin(
   return next;
 }
 
-function createPlayers(): Player[] {
-  return PLAYER_NAMES.map((name, index) => ({
+function createPlayers(names: PlayerNames): Player[] {
+  return names.map((name, index) => ({
     seat: index as Seat,
     name,
     wind: WINDS[index],
