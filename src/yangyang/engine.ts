@@ -34,54 +34,29 @@ export type YangGameState = YangSnapshot & {
   history: YangSnapshot[];
 };
 
+function rectPoints(startX: number, startY: number, columns: number, rows: number, layer: number): Array<{ x: number; y: number; layer: number }> {
+  return Array.from({ length: rows }).flatMap((_, row) =>
+    Array.from({ length: columns }).map((__, col) => ({
+      x: startX + col,
+      y: startY + row,
+      layer,
+    })),
+  );
+}
+
 const layoutPoints: Array<{ x: number; y: number; layer: number }> = [
-  { x: 2.0, y: 0.9, layer: 0 },
-  { x: 3.0, y: 0.9, layer: 0 },
-  { x: 4.0, y: 0.9, layer: 0 },
-  { x: 5.0, y: 0.9, layer: 0 },
-  { x: 2.0, y: 1.9, layer: 0 },
-  { x: 3.0, y: 1.9, layer: 0 },
-  { x: 4.0, y: 1.9, layer: 0 },
-  { x: 5.0, y: 1.9, layer: 0 },
-  { x: 2.0, y: 2.9, layer: 0 },
-  { x: 3.0, y: 2.9, layer: 0 },
-  { x: 4.0, y: 2.9, layer: 0 },
-  { x: 5.0, y: 2.9, layer: 0 },
-  { x: 2.0, y: 3.9, layer: 0 },
-  { x: 3.0, y: 3.9, layer: 0 },
-  { x: 4.0, y: 3.9, layer: 0 },
-  { x: 5.0, y: 3.9, layer: 0 },
-
-  { x: 1.15, y: 1.35, layer: 1 },
-  { x: 2.15, y: 1.35, layer: 1 },
-  { x: 3.15, y: 1.35, layer: 1 },
-  { x: 4.15, y: 1.35, layer: 1 },
-  { x: 5.15, y: 1.35, layer: 1 },
-  { x: 6.15, y: 1.35, layer: 1 },
-  { x: 1.15, y: 2.35, layer: 1 },
-  { x: 2.15, y: 2.35, layer: 1 },
-  { x: 3.15, y: 2.35, layer: 1 },
-  { x: 4.15, y: 2.35, layer: 1 },
-  { x: 5.15, y: 2.35, layer: 1 },
-  { x: 6.15, y: 2.35, layer: 1 },
-  { x: 1.15, y: 3.35, layer: 1 },
-  { x: 2.15, y: 3.35, layer: 1 },
-  { x: 3.15, y: 3.35, layer: 1 },
-  { x: 4.15, y: 3.35, layer: 1 },
-  { x: 5.15, y: 3.35, layer: 1 },
-  { x: 6.15, y: 3.35, layer: 1 },
-
-  { x: 2.45, y: 1.8, layer: 2 },
-  { x: 3.45, y: 1.8, layer: 2 },
-  { x: 4.45, y: 1.8, layer: 2 },
-  { x: 2.45, y: 2.8, layer: 2 },
-  { x: 3.45, y: 2.8, layer: 2 },
-  { x: 4.45, y: 2.8, layer: 2 },
-  { x: 2.95, y: 2.3, layer: 3 },
-  { x: 3.95, y: 2.3, layer: 3 },
-  { x: 3.45, y: 2.05, layer: 4 },
-  { x: 3.45, y: 2.55, layer: 4 },
-  { x: 3.45, y: 2.3, layer: 5 },
+  ...rectPoints(2, 1, 4, 4, 0),
+  ...rectPoints(1.52, 1.42, 5, 3, 1),
+  ...rectPoints(2.08, 1.86, 4, 2, 2),
+  ...rectPoints(2.58, 2.28, 3, 2, 3),
+  ...rectPoints(3.08, 2.68, 2, 1, 4),
+  { x: 3.58, y: 2.92, layer: 5 },
+  { x: -0.3, y: 0.6, layer: 1 },
+  { x: -0.3, y: 1.65, layer: 1 },
+  { x: -0.3, y: 2.7, layer: 1 },
+  { x: 6.9, y: 0.6, layer: 1 },
+  { x: 6.9, y: 1.65, layer: 1 },
+  { x: 6.9, y: 2.7, layer: 1 },
 ];
 
 const levelCodes: CasualTileCode[] = [
@@ -130,6 +105,15 @@ const levelCodes: CasualTileCode[] = [
   "red",
   "red",
   "red",
+  "green",
+  "green",
+  "green",
+  "white",
+  "white",
+  "white",
+  "south",
+  "south",
+  "south",
 ];
 
 function snapshot(state: YangGameState): YangSnapshot {
@@ -142,8 +126,8 @@ function snapshot(state: YangGameState): YangSnapshot {
 }
 
 function intersects(first: YangTile, second: YangTile): boolean {
-  const horizontal = Math.abs(first.x - second.x) < 0.86;
-  const vertical = Math.abs(first.y - second.y) < 0.86;
+  const horizontal = Math.abs(first.x - second.x) < 0.92;
+  const vertical = Math.abs(first.y - second.y) < 0.92;
   return horizontal && vertical;
 }
 

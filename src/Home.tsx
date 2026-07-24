@@ -54,15 +54,15 @@ export default function Home({ onSelect }: { onSelect: (mode: GameMode) => void 
                 <ChevronRight className="home-card__go" size={22} />
               </button>
 
-              <button className="home-card home-card--yang home-card--locked" disabled aria-label="麻将羊羊消敬请期待">
+              <button className="home-card home-card--yang" onClick={() => onSelect("yangyang")} aria-label="开始麻将羊羊消">
                 <div className="home-card__icon">
                   <Layers3 size={28} />
                 </div>
                 <div className="home-card__body">
                   <h3>麻将羊羊消</h3>
-                  <p>多层牌堆、槽位消除和关卡节奏还在打磨中，后续开放。</p>
+                  <p>多层麻将牌堆，优先拆上层城堡牌，底部 7 槽中三张同牌会自动消除。</p>
                 </div>
-                <span className="home-card__badge">敬请期待</span>
+                <ChevronRight className="home-card__go" size={22} />
               </button>
             </div>
           </section>
