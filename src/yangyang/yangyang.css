@@ -1,0 +1,170 @@
+.yang-shell {
+  background:
+    radial-gradient(circle at 18% 12%, rgba(231, 184, 82, 0.2), transparent 28%),
+    radial-gradient(circle at 80% 70%, rgba(190, 46, 37, 0.18), transparent 30%),
+    linear-gradient(140deg, #0a1310, #173022 48%, #161008);
+}
+
+.yang-frame {
+  width: min(1180px, 100%);
+}
+
+.yang-playfield {
+  display: grid;
+  place-items: center;
+  min-height: 0;
+  padding: clamp(4px, 1vw, 10px);
+}
+
+.yang-stack {
+  --yang-tile-w: clamp(44px, 6vw, 70px);
+  --yang-tile-h: calc(var(--yang-tile-w) * 1.42);
+  --yang-step-x: calc(var(--yang-tile-w) * 0.78);
+  --yang-step-y: calc(var(--yang-tile-h) * 0.54);
+  position: relative;
+  width: min(100%, calc(var(--yang-step-x) * 7.6 + var(--yang-tile-w)));
+  height: min(100%, calc(var(--yang-step-y) * 5 + var(--yang-tile-h) + 18px));
+  min-height: 0;
+  aspect-ratio: 2.05 / 1;
+  border: 1px solid rgba(255, 247, 227, 0.15);
+  border-radius: 8px;
+  background:
+    linear-gradient(90deg, rgba(255, 247, 227, 0.03), transparent 24%, rgba(255, 247, 227, 0.03) 52%, transparent),
+    radial-gradient(ellipse at center, rgba(25, 98, 70, 0.74), rgba(5, 26, 20, 0.64) 68%);
+  box-shadow:
+    inset 0 0 0 5px rgba(0, 0, 0, 0.13),
+    0 18px 42px rgba(0, 0, 0, 0.24);
+}
+
+.yang-stack::before {
+  content: "";
+  position: absolute;
+  inset: 9px;
+  border: 1px solid rgba(215, 163, 72, 0.18);
+  border-radius: 8px;
+  pointer-events: none;
+}
+
+.yang-tile {
+  position: absolute;
+  left: calc(50% - (var(--yang-step-x) * 3.65) + var(--yang-x) * var(--yang-step-x));
+  top: calc(50% - (var(--yang-step-y) * 2.9) + var(--yang-y) * var(--yang-step-y));
+  z-index: calc(2 + var(--yang-layer));
+  display: grid;
+  place-items: center;
+  width: var(--yang-tile-w);
+  height: var(--yang-tile-h);
+  padding: 0;
+  border: 1px solid rgba(255, 247, 227, 0.16);
+  border-radius: 8px;
+  background: rgba(255, 247, 227, 0.07);
+  cursor: pointer;
+  transform: translateY(calc(var(--yang-layer) * -4px));
+  transition:
+    transform 150ms ease,
+    filter 150ms ease,
+    opacity 180ms ease,
+    border-color 150ms ease;
+}
+
+.yang-tile img {
+  display: block;
+  width: 86%;
+  height: 92%;
+  object-fit: contain;
+  filter:
+    drop-shadow(0 8px 7px rgba(0, 0, 0, 0.28))
+    drop-shadow(0 1px 0 rgba(255, 255, 255, 0.18));
+  user-select: none;
+}
+
+.yang-tile.is-clickable:hover,
+.yang-tile.is-hinted {
+  transform: translateY(calc(var(--yang-layer) * -4px - 6px));
+  border-color: rgba(255, 216, 137, 0.86);
+  filter: drop-shadow(0 14px 15px rgba(0, 0, 0, 0.3));
+}
+
+.yang-tile.is-hinted {
+  box-shadow: 0 0 0 2px rgba(255, 216, 137, 0.26);
+}
+
+.yang-tile.is-blocked {
+  cursor: not-allowed;
+  opacity: 0.54;
+  filter: saturate(0.72) brightness(0.82);
+}
+
+.yang-tile.is-removed {
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(calc(var(--yang-layer) * -4px + 8px)) scale(0.78);
+}
+
+.yang-slotbar {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(34px, 58px));
+  justify-content: center;
+  gap: clamp(5px, 1vw, 9px);
+  padding: clamp(6px, 1vw, 10px);
+  border: 1px solid rgba(255, 247, 227, 0.14);
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(255, 247, 227, 0.08), rgba(255, 247, 227, 0.03)),
+    rgba(4, 20, 15, 0.58);
+}
+
+.yang-slot {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 0.72 / 1;
+  min-height: 0;
+  border: 1px dashed rgba(255, 247, 227, 0.2);
+  border-radius: 8px;
+  background: rgba(255, 247, 227, 0.05);
+}
+
+.yang-slot.is-filled {
+  border-style: solid;
+  border-color: rgba(255, 216, 137, 0.38);
+  background: rgba(215, 163, 72, 0.08);
+}
+
+.yang-slot img {
+  display: block;
+  width: 88%;
+  height: 92%;
+  object-fit: contain;
+  filter: drop-shadow(0 7px 7px rgba(0, 0, 0, 0.24));
+}
+
+@media (orientation: landscape) and (max-height: 430px) {
+  .yang-playfield {
+    padding: 1px 4px;
+  }
+
+  .yang-stack {
+    --yang-tile-w: clamp(33px, 5.2vw, 46px);
+    width: min(100%, calc((100dvh - 92px) * 2.45));
+    height: min(100%, calc(100dvh - 92px));
+  }
+
+  .yang-slotbar {
+    grid-template-columns: repeat(7, minmax(25px, 40px));
+    gap: 4px;
+    padding: 4px 6px;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 300px) {
+  .yang-stack {
+    --yang-tile-w: clamp(27px, 4.8vw, 36px);
+    width: min(100%, calc((100dvh - 70px) * 2.5));
+    height: min(100%, calc(100dvh - 70px));
+  }
+
+  .yang-slotbar {
+    grid-template-columns: repeat(7, minmax(22px, 32px));
+    padding: 3px 5px;
+  }
+}
