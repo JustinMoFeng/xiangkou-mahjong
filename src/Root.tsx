@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import App from "./App";
-import Home, { XiangkouModeSelect, type GameMode } from "./Home";
+import Home, { SichuanModeSelect, XiangkouModeSelect, type GameMode } from "./Home";
 import SichuanApp from "./sichuan/SichuanApp";
 import "./sichuan/sichuan.css";
 import "./home.css";
 
-type View = "home" | "xiangkou" | "classic" | "sichuan";
+type View = "home" | "xiangkou" | "sichuanMode" | "classic" | "sichuan";
 
 const BASE_PATH = new URL(import.meta.env.BASE_URL, window.location.origin).pathname.replace(/\/+$/, "");
 
@@ -53,7 +53,10 @@ function resolveView(): View {
   if (path === "/classic" || path === "/play/xiangkou/bot") {
     return "classic";
   }
-  if (path === "/sichuan" || path === "/game/sichuan") {
+  if (path === "/game/sichuan") {
+    return "sichuanMode";
+  }
+  if (path === "/sichuan" || path === "/play/sichuan/bot") {
     return "sichuan";
   }
   return "home";
@@ -81,11 +84,15 @@ export default function Root() {
       navigate("/game/xiangkou", "xiangkou");
       return;
     }
-    navigate("/game/sichuan", "sichuan");
+    navigate("/game/sichuan", "sichuanMode");
   }
 
   function enterClassicBot() {
     navigate("/play/xiangkou/bot", "classic");
+  }
+
+  function enterSichuanBot() {
+    navigate("/play/sichuan/bot", "sichuan");
   }
 
   function backHome() {
@@ -100,8 +107,12 @@ export default function Root() {
     return <XiangkouModeSelect onBackHome={backHome} onEnterBot={enterClassicBot} />;
   }
 
+  if (view === "sichuanMode") {
+    return <SichuanModeSelect onBackHome={backHome} onEnterBot={enterSichuanBot} />;
+  }
+
   if (view === "sichuan") {
-    return <SichuanApp onBackHome={backHome} />;
+    return <SichuanApp onBackHome={() => navigate("/game/sichuan", "sichuanMode")} />;
   }
 
   return <App onBackHome={() => navigate("/game/xiangkou", "xiangkou")} />;

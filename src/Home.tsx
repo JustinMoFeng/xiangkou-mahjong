@@ -91,3 +91,53 @@ export function XiangkouModeSelect({
     </main>
   );
 }
+
+export function SichuanModeSelect({
+  onBackHome,
+  onEnterBot,
+}: {
+  onBackHome: () => void;
+  onEnterBot: () => void;
+}) {
+  return (
+    <main className="home-shell" aria-label="四川麻将开桌方式">
+      <section className="home-frame home-frame--sichuan">
+        <header className="home-header home-header--split">
+          <button className="home-back" type="button" onClick={onBackHome} aria-label="返回游戏大厅">
+            <ArrowLeft size={18} />
+            返回
+          </button>
+          <div>
+            <p className="home-eyebrow">川麻 · 血战到底</p>
+            <h1>选择开桌方式</h1>
+            <p className="home-sub">当前可进入人机血战，朋友房间稍后开放</p>
+          </div>
+        </header>
+
+        <div className="home-modes">
+          <button className="home-card home-card--sichuan" onClick={onEnterBot} aria-label="进入人机血战">
+            <div className="home-card__icon">
+              <Bot size={28} />
+            </div>
+            <div className="home-card__body">
+              <h2>人机血战</h2>
+              <p>开局定缺，只碰杠不吃，胡牌亮牌离场，剩余玩家继续血战。</p>
+            </div>
+            <ChevronRight className="home-card__go" size={22} />
+          </button>
+
+          <button className="home-card home-card--locked" disabled aria-label="川麻朋友房间敬请期待">
+            <div className="home-card__icon">
+              <Users size={28} />
+            </div>
+            <div className="home-card__body">
+              <h2>朋友房间</h2>
+              <p>川麻开房、邀请好友和实时结算同步还在搭桌中。</p>
+            </div>
+            <span className="home-card__badge">敬请期待</span>
+          </button>
+        </div>
+      </section>
+    </main>
+  );
+}
