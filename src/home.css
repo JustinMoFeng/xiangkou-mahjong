@@ -38,7 +38,10 @@
 }
 
 .home-header--split {
-  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  justify-content: start;
 }
 
 .home-eyebrow {
@@ -180,11 +183,9 @@
 }
 
 .home-back {
-  position: absolute;
-  top: 0;
-  left: 0;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
   min-height: 32px;
   padding: 0 10px;
@@ -196,6 +197,7 @@
   font: inherit;
   font-size: 0.78rem;
   font-weight: 800;
+  white-space: nowrap;
 }
 
 .home-back:hover {
@@ -216,7 +218,9 @@
   }
 
   .home-header--split {
-    padding-top: 38px;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
   }
 
   .home-modes {

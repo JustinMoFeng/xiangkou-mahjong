@@ -19,8 +19,17 @@ test("loads real tile images", async ({ page }) => {
 
   await expect(page.getByLabel("你的手牌")).toBeVisible();
 
-  const tileImages = page.locator(".tile-face__image");
-  await expect(tileImages.first()).toBeVisible();
+  const tileImages = page.locator(".hand-row .tile-face__image");
+  await expect(tileImages).toHaveCount(14);
+  const visibleTileCount = await tileImages.evaluateAll((nodes) =>
+    nodes.filter((node) => {
+      const element = node as HTMLImageElement;
+      const bounds = element.getBoundingClientRect();
+      const style = getComputedStyle(element);
+      return bounds.width > 0 && bounds.height > 0 && style.display !== "none" && style.visibility !== "hidden";
+    }).length,
+  );
+  expect(visibleTileCount).toBeGreaterThan(0);
   await expect(tileImages.first()).toHaveAttribute("src", /\/tiles\/.+\.svg$/);
   expect(await tileImages.count()).toBeGreaterThanOrEqual(14);
 });
@@ -251,6 +260,9 @@ test("opponent racks and meld tiles face the correct table direction", async ({ 
   });
 
   await gotoScenario(page, "multi-chow");
+  await expect(page.locator(".table-seat--top .tile-back")).not.toHaveCount(0);
+  await expect(page.locator(".table-seat--left .tile-back")).not.toHaveCount(0);
+  await expect(page.locator(".table-seat--right .tile-back")).not.toHaveCount(0);
   const rackRotations = await readRotations();
   const leftRiverRotation = await page.evaluate(() => {
     const element = document.querySelector(".river-zone--left .tile-face");
@@ -475,9 +487,8 @@ test("bot discards face their own seat and keep the latest tile glowing", async 
 });
 
 test("normal game persists current round across refresh and exposes settings restart", async ({ page }) => {
+  await page.addInitScript(() => window.localStorage.clear());
   await page.goto("/play/xiangkou/bot");
-  await page.evaluate(() => window.localStorage.clear());
-  await page.reload();
 
   await expect(page.getByTestId("drawn-tile")).toHaveCount(1);
 

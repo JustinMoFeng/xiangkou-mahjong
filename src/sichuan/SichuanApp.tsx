@@ -1,4 +1,4 @@
-import { AlignJustify, Bot, Home as HomeIcon, Pause, Play, RotateCcw, Sparkles, Trophy } from "lucide-react";
+import { AlignJustify, Bot, CircleHelp, Home as HomeIcon, Pause, Play, RotateCcw, Sparkles, Trophy, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
   arrangeHand,
@@ -18,6 +18,7 @@ import {
   passClaim,
   playBotTurnStep,
 } from "./engine";
+import { BASE_POINTS, MAX_FAN } from "./rules";
 import { clearSavedGame, loadSavedGame, saveGame } from "./storage";
 import { SUIT_LABELS, tileAssetPath, tileColorClass } from "./tiles";
 import type { ClaimOption, GameState, Meld, Player, SuitPrefix, Tile, TileCode } from "./types";
@@ -36,6 +37,7 @@ export default function SichuanApp({ onBackHome }: { onBackHome?: () => void }) 
   const [state, setState] = useState<GameState>(() => loadSavedGame() ?? createNewGame());
   const [highlightedTileIds, setHighlightedTileIds] = useState<string[]>([]);
   const [isPaused, setIsPaused] = useState(false);
+  const [isRulesHelpOpen, setIsRulesHelpOpen] = useState(false);
   const [kongMenuOpen, setKongMenuOpen] = useState(false);
 
   const human = state.players[0];
@@ -143,7 +145,7 @@ export default function SichuanApp({ onBackHome }: { onBackHome?: () => void }) 
         </div>
       </div>
       <section className="game-frame" aria-label="川麻牌桌">
-        <Header state={state} onPause={() => setIsPaused(true)} onBackHome={onBackHome} />
+        <Header state={state} onPause={() => setIsPaused(true)} onOpenHelp={() => setIsRulesHelpOpen(true)} onBackHome={onBackHome} />
 
         <section className="mahjong-table" aria-label="四人川麻桌">
           <div className="table-felt" aria-hidden="true" />
@@ -250,6 +252,7 @@ export default function SichuanApp({ onBackHome }: { onBackHome?: () => void }) 
           <ResultOverlay state={state} onRestart={restart} onNextRound={nextRound} onBackHome={onBackHome} />
         ) : null}
         {isPaused ? <PauseOverlay state={state} onResume={() => setIsPaused(false)} onRestart={restart} /> : null}
+        {isRulesHelpOpen ? <SichuanRulesHelpOverlay onClose={() => setIsRulesHelpOpen(false)} /> : null}
       </section>
     </main>
   );
@@ -258,10 +261,12 @@ export default function SichuanApp({ onBackHome }: { onBackHome?: () => void }) 
 function Header({
   state,
   onPause,
+  onOpenHelp,
   onBackHome,
 }: {
   state: GameState;
   onPause: () => void;
+  onOpenHelp: () => void;
   onBackHome?: () => void;
 }) {
   const human = state.players[0];
@@ -292,6 +297,9 @@ function Header({
             <HomeIcon size={18} />
           </button>
         ) : null}
+        <button className="icon-command" onClick={onOpenHelp} title="查看川麻帮助" aria-label="查看川麻帮助">
+          <CircleHelp size={18} />
+        </button>
         <button className="icon-command" onClick={onPause} title="暂停" aria-label="暂停">
           <Pause size={18} />
         </button>
@@ -473,20 +481,87 @@ function MissingSuitOverlay({ human, onChoose }: { human: Player; onChoose: (sui
   }
 
   return (
-    <div className="result-backdrop" role="dialog" aria-modal="true" aria-label="定缺">
-      <section className="result-card">
+    <aside className="sc-missing-panel" aria-label="定缺">
+      <div>
         <p className="eyebrow">开局定缺</p>
         <h2>选择一门要缺的花色</h2>
-        <p className="pattern-note">缺门花色不能留在手里，否则不能胡牌；建议缺张数最少的一门。</p>
-        <div className="sc-missing-grid">
-          {suitOrder.map((suit) => (
-            <button key={suit} className="sc-missing-option" onClick={() => onChoose(suit)} data-testid={`sc-missing-${suit}`}>
-              <span className="sc-missing-suit">{SUIT_LABELS[suit]}</span>
-              <small>{counts[suit]} 张</small>
-            </button>
-          ))}
+        <p>看清手牌后再选；缺门花色不能留在手里，否则不能胡牌。</p>
+      </div>
+      <div className="sc-missing-grid">
+        {suitOrder.map((suit) => (
+          <button key={suit} className="sc-missing-option" onClick={() => onChoose(suit)} data-testid={`sc-missing-${suit}`}>
+            <span className="sc-missing-suit">{SUIT_LABELS[suit]}</span>
+            <small>{counts[suit]} 张</small>
+          </button>
+        ))}
+      </div>
+    </aside>
+  );
+}
+
+function SichuanRulesHelpOverlay({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="result-backdrop rules-help-backdrop" role="dialog" aria-modal="true" aria-label="川麻帮助">
+      <section className="result-card rules-help-card">
+        <div className="rules-help-header">
+          <div>
+            <p className="eyebrow">川麻帮助</p>
+            <h2>胡法与番型</h2>
+          </div>
+          <button className="icon-command" onClick={onClose} title="关闭帮助" aria-label="关闭帮助">
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="rules-help-section">
+          <h3>基本规则</h3>
+          <div className="rules-help-list">
+            <SichuanRuleRow name="开局定缺" value="必选" description="每家选择一门缺门。手里仍有缺门牌时不能胡牌。" />
+            <SichuanRuleRow name="只碰杠不吃" value="川麻" description="支持碰、直杠、暗杠、补杠；不提供吃牌。" />
+            <SichuanRuleRow name="血战到底" value="续局" description="胡牌者亮牌离场，其余玩家继续，直到只剩一家或牌墙摸完。" />
+          </div>
+        </div>
+
+        <div className="rules-help-section">
+          <h3>番型</h3>
+          <div className="rules-help-list">
+            <SichuanRuleRow name="平胡" value="0 番" description="标准 4 面子 1 将，无额外番型。" />
+            <SichuanRuleRow name="对对胡" value="+1 番" description="全部面子都是刻子或杠子。" />
+            <SichuanRuleRow name="七对" value="+2 番" description="14 张牌组成 7 个对子。" />
+            <SichuanRuleRow name="清一色" value="+2 番" description="所有牌来自同一种花色。" />
+            <SichuanRuleRow name="将对" value="+2 番" description="对对胡且所有牌都是 2、5、8。" />
+            <SichuanRuleRow name="金钩钓" value="+1 番" description="四组副露后单吊胡牌。" />
+            <SichuanRuleRow name="根" value="每根 +1" description="同一张牌出现 4 张计一根，七对中四张也计根。" />
+          </div>
+        </div>
+
+        <div className="rules-help-section">
+          <h3>结算项</h3>
+          <div className="rules-help-list">
+            <SichuanRuleRow name="自摸" value="+1 番" description="自己摸到胡牌张。" />
+            <SichuanRuleRow name="杠上开花 / 杠上炮" value="+1 番" description="杠后补摸胡牌，或杠后打出的牌点炮。" />
+            <SichuanRuleRow name="抢杠胡" value="+1 番" description="别人补杠时用那张牌胡。" />
+            <SichuanRuleRow name="海底" value="+1 番" description="最后一张牌自摸或点炮。" />
+            <SichuanRuleRow name="天胡 / 地胡" value="+6 番" description="开局极早阶段形成的高番胡牌。" />
+          </div>
+        </div>
+
+        <div className="rules-help-note">
+          分数 = 底分 <strong>{BASE_POINTS}</strong> x 2^番，最高 <strong>{MAX_FAN} 番</strong>。流局会查大叫、查花猪，并退还未听/花猪相关杠分。
         </div>
       </section>
+    </div>
+  );
+}
+
+function SichuanRuleRow({ name, value, description }: { name: string; value: string; description: string }) {
+  return (
+    <div className="rules-help-row">
+      <div>
+        <strong>{name}</strong>
+        <p>{description}</p>
+      </div>
+      <span>{value}</span>
     </div>
   );
 }

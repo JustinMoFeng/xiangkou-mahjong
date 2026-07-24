@@ -210,21 +210,54 @@
   color: #f0c069;
 }
 
-/* Missing-suit picker grid (inside the shared result-card) */
+.sc-missing-panel {
+  position: absolute;
+  right: clamp(10px, 2vw, 18px);
+  bottom: calc(var(--hand-tile-height) + clamp(52px, 9vh, 86px));
+  z-index: 9;
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  width: min(560px, calc(100% - 20px));
+  padding: 10px 12px;
+  border: 1px solid rgba(240, 192, 105, 0.42);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(255, 244, 221, 0.1), transparent 36%),
+    rgba(44, 9, 8, 0.9);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.34);
+  backdrop-filter: blur(6px);
+}
+
+.sc-missing-panel h2 {
+  margin: 0;
+  color: #fff4dd;
+  font-size: clamp(1rem, 2vw, 1.28rem);
+}
+
+.sc-missing-panel p {
+  margin: 4px 0 0;
+  color: rgba(251, 238, 222, 0.72);
+  font-size: 0.74rem;
+  line-height: 1.35;
+}
+
 .sc-missing-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-  margin-top: 16px;
+  gap: 8px;
+  margin-top: 0;
 }
 
 .sc-missing-option {
   display: grid;
-  gap: 6px;
+  gap: 3px;
   justify-items: center;
-  padding: 18px 10px;
+  min-width: 58px;
+  padding: 8px 9px;
   border: 1px solid rgba(240, 192, 105, 0.4);
-  border-radius: 12px;
+  border-radius: 8px;
   color: #fff4dd;
   background: rgba(255, 244, 221, 0.08);
   cursor: pointer;
@@ -242,14 +275,54 @@
 }
 
 .sc-missing-suit {
-  font-size: 2.2rem;
+  font-size: 1.2rem;
   font-weight: 900;
   color: #f0c069;
 }
 
 .sc-missing-option small {
   color: rgba(251, 238, 222, 0.7);
-  font-size: 0.8rem;
+  font-size: 0.68rem;
+}
+
+@media (orientation: landscape) and (max-height: 430px) {
+  .sc-missing-panel {
+    right: 6px;
+    bottom: calc(var(--hand-tile-height) + 34px);
+    grid-template-columns: minmax(120px, 1fr) auto;
+    gap: 8px;
+    padding: 7px 8px;
+  }
+
+  .sc-missing-panel h2 {
+    font-size: 0.82rem;
+  }
+
+  .sc-missing-panel p,
+  .sc-missing-option small {
+    font-size: 0.56rem;
+  }
+
+  .sc-missing-option {
+    min-width: 46px;
+    padding: 5px 6px;
+  }
+
+  .sc-missing-suit {
+    font-size: 0.9rem;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 320px) {
+  .sc-missing-panel {
+    left: 6px;
+    right: 6px;
+    bottom: calc(var(--hand-tile-height) + 28px);
+  }
+
+  .sc-missing-panel p {
+    display: none;
+  }
 }
 
 /* Result: winner list + settlement table */
