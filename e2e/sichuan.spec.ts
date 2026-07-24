@@ -162,7 +162,12 @@ test("home page lets you pick a mode and routes by path", async ({ page }) => {
   await page.evaluate(() => window.localStorage.clear());
   await page.reload();
 
-  await expect(page.locator(".home-header h1")).toHaveText("巷口麻将");
+  await expect(page.locator(".home-header h1")).toHaveText("麻将游戏合集");
+  await expect(page.getByRole("button", { name: "选择巷口麻将" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /川麻/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: "开始麻将连连看" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "麻将羊羊消敬请期待" })).toBeDisabled();
+
   await page.getByRole("button", { name: "选择巷口麻将" }).click();
   await expect(page).toHaveURL(/\/game\/xiangkou$/);
   await expect(page.getByRole("heading", { name: "选择开桌方式" })).toBeVisible();
@@ -177,6 +182,14 @@ test("home page lets you pick a mode and routes by path", async ({ page }) => {
   await page.getByRole("button", { name: "进入人机血战" }).click();
   await expect(page).toHaveURL(/\/play\/sichuan\/bot$/);
   await expect(page.getByLabel("定缺")).toBeVisible();
+
+  await page.goto("/");
+  await page.getByRole("button", { name: "开始麻将连连看" }).click();
+  await expect(page).toHaveURL(/\/play\/link-match$/);
+  await expect(page.getByLabel("麻将连连看")).toBeVisible();
+
+  await page.goto("/");
+  await expect(page.getByRole("button", { name: "麻将羊羊消敬请期待" })).toBeDisabled();
 });
 
 test("home and mode selection fit short mobile landscape browser viewports", async ({ page, browserName }) => {
@@ -216,6 +229,9 @@ test("home and mode selection fit short mobile landscape browser viewports", asy
           height: bounds.height,
         };
       });
+      const overlaps = cards.flatMap((card, index) =>
+        cards.slice(index + 1).map((other) => overlapArea(card, other)),
+      );
 
       return {
         noOverflow:
@@ -224,7 +240,7 @@ test("home and mode selection fit short mobile landscape browser viewports", asy
         frameInside: insideViewport(rect(".home-frame")),
         cardsInside: cards.every(insideViewport),
         cardCount: cards.length,
-        cardOverlap: cards.length >= 2 ? overlapArea(cards[0], cards[1]) : 0,
+        cardOverlap: Math.max(0, ...overlaps),
         minCardHeight: Math.min(...cards.map((card) => card.height)),
       };
     });
@@ -233,7 +249,7 @@ test("home and mode selection fit short mobile landscape browser viewports", asy
       noOverflow: true,
       frameInside: true,
       cardsInside: true,
-      cardCount: 2,
+      cardCount: label.includes(" home") ? 4 : 2,
       cardOverlap: 0,
       minCardHeight: expect.any(Number),
     });
@@ -259,6 +275,196 @@ test("home and mode selection fit short mobile landscape browser viewports", asy
     await expect(page).toHaveURL(/\/game\/sichuan$/);
     await assertHomeLayout(`${viewport.width}x${viewport.height} sichuan`, minCardHeight);
   }
+});
+
+test("casual games enter and support first interactions", async ({ page }) => {
+  await page.addInitScript(() => window.localStorage.clear());
+  await page.goto("/play/link-match?seed=23");
+  await expect(page.getByLabel("麻将连连看关卡选择")).toBeVisible();
+  await expect(page.locator("[aria-label='连连看关卡']").getByRole("button")).toHaveCount(6);
+  await expect(page.getByRole("button", { name: /入门/ })).toContainText("8x6 / 48张");
+  await expect(page.getByRole("button", { name: /专家/ })).toContainText("12x12 / 144张");
+  await expect(page.getByRole("button", { name: /无尽/ })).toContainText("12x12内循环");
+
+  await page.getByRole("button", { name: /普通/ }).click();
+  await expect(page.getByLabel("麻将连连看")).toBeVisible();
+  const normalTileCount = await page.getByTestId("link-tile").count();
+  expect(normalTileCount).toBeGreaterThanOrEqual(56);
+  expect(normalTileCount).toBeLessThanOrEqual(64);
+  const normalCodes = await page.getByTestId("link-tile").evaluateAll((nodes) =>
+    Array.from(new Set(nodes.map((node) => (node as HTMLElement).dataset.code ?? ""))).length,
+  );
+  expect(normalCodes).toBeLessThanOrEqual(8);
+
+  await page.getByRole("button", { name: /提示/ }).click();
+  await expect(page.getByTestId("link-path")).toBeVisible();
+  const hintedLinkTiles = page.locator(".link-tile.is-hinted");
+  await expect(hintedLinkTiles).toHaveCount(2);
+  const hintedIds = await hintedLinkTiles.evaluateAll((nodes) =>
+    nodes.map((node) => (node as HTMLElement).dataset.tileId ?? ""),
+  );
+  await page.locator(`[data-tile-id="${hintedIds[0]}"]`).click();
+  await page.locator(`[data-tile-id="${hintedIds[1]}"]`).click();
+  await expect(page.locator(".link-tile.is-removed")).toHaveCount(2);
+  await expect(page.getByTestId("link-path")).toBeVisible();
+  await expect(page.getByTestId("link-path")).toHaveCount(0, { timeout: 1500 });
+
+  await page.getByLabel("返回关卡").click();
+  await expect(page.getByLabel("麻将连连看关卡选择")).toBeVisible();
+
+  await page.goto("/play/yangyang?seed=23");
+  await expect(page.getByLabel("麻将羊羊消")).toBeVisible();
+  await expect(page.getByTestId("yang-tile")).toHaveCount(45);
+  const blockedTiles = page.locator('[data-testid="yang-tile"][data-blocked="true"]');
+  await expect(blockedTiles.first()).toBeDisabled();
+
+  await page.goto("/play/yangyang?level=triple");
+  await expect(page.getByLabel("麻将羊羊消")).toBeVisible();
+  await expect(page.locator('[data-testid="yang-tile"][data-blocked="true"]').first()).toBeDisabled();
+  const tripleTiles = page.locator('[data-testid="yang-tile"][data-code="m1"]');
+  await expect(tripleTiles).toHaveCount(3);
+  await tripleTiles.nth(0).click();
+  await tripleTiles.nth(1).click();
+  await tripleTiles.nth(2).click();
+  await expect(page.locator(".yang-slot.is-filled")).toHaveCount(0);
+});
+
+test("link match records best time and advances through presets", async ({ page }) => {
+  await page.addInitScript(() => window.localStorage.clear());
+  await page.goto("/play/link-match?level=tiny-test&seed=23");
+
+  const tinyTiles = page.getByTestId("link-tile");
+  await expect(tinyTiles).toHaveCount(2);
+  await tinyTiles.nth(0).click();
+  await tinyTiles.nth(1).click();
+
+  await expect(page.getByRole("dialog", { name: "连连看结算" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "下一关" })).toBeVisible();
+  await expect.poll(async () =>
+    page.evaluate(() => JSON.parse(window.localStorage.getItem("mahjong-link-match-best-times-v1") ?? "{}")["tiny-test"]),
+  ).toBeGreaterThan(0);
+
+  await page.getByRole("button", { name: "下一关" }).click();
+  const nextTileCount = await page.getByTestId("link-tile").count();
+  expect(nextTileCount).toBeGreaterThanOrEqual(56);
+  expect(nextTileCount).toBeLessThanOrEqual(64);
+});
+
+test("casual games fit short mobile landscape browser viewports", async ({ page, browserName }) => {
+  test.skip(browserName !== "chromium", "short casual viewport matrix only needs one Chromium project");
+
+  const assertCasualLayout = async (
+    label: string,
+    route: string,
+    frameSelector: string,
+    playSelector: string,
+    controlSelector = ".casual-topbar",
+  ) => {
+    await page.goto(route);
+    const layout = await page.evaluate(
+      ({ frameSelector, playSelector, controlSelector }) => {
+        const rect = (selector: string) => {
+          const element = document.querySelector(selector);
+          if (!element) throw new Error(`Missing ${selector}`);
+          const bounds = element.getBoundingClientRect();
+          return {
+            left: bounds.left,
+            top: bounds.top,
+            right: bounds.right,
+            bottom: bounds.bottom,
+            width: bounds.width,
+            height: bounds.height,
+          };
+        };
+        const insideViewport = (bounds: ReturnType<typeof rect>) =>
+          bounds.left >= -1 &&
+          bounds.top >= -1 &&
+          bounds.right <= window.innerWidth + 1 &&
+          bounds.bottom <= window.innerHeight + 1;
+
+        return {
+          noOverflow:
+            document.documentElement.scrollWidth <= window.innerWidth + 1 &&
+            document.documentElement.scrollHeight <= window.innerHeight + 1,
+          frameInside: insideViewport(rect(frameSelector)),
+          playInside: insideViewport(rect(playSelector)),
+          controlInside: insideViewport(rect(controlSelector)),
+        };
+      },
+      { frameSelector, playSelector, controlSelector },
+    );
+
+    expect(layout, label).toEqual({
+      noOverflow: true,
+      frameInside: true,
+      playInside: true,
+      controlInside: true,
+    });
+  };
+
+  for (const viewport of [
+    { width: 740, height: 320 },
+    { width: 802, height: 293 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await assertCasualLayout(
+      `${viewport.width}x${viewport.height} link levels`,
+      "/play/link-match",
+      ".link-level-select",
+      ".link-level-grid",
+      ".link-level-select__top",
+    );
+    await assertCasualLayout(
+      `${viewport.width}x${viewport.height} link board`,
+      "/play/link-match?level=diamond",
+      ".link-game-frame",
+      "[data-testid='link-board-viewport']",
+    );
+    await assertCasualLayout(`${viewport.width}x${viewport.height} yang`, "/play/yangyang", ".yang-frame", ".yang-stack");
+  }
+});
+
+test("link match large boards pan on mobile landscape", async ({ page }) => {
+  test.skip(test.info().project.name !== "mobile-landscape", "touch panning is checked in the mobile landscape project");
+
+  await page.goto("/play/link-match?level=endless");
+  await expect(page.getByLabel("麻将连连看")).toBeVisible();
+
+  const before = await page.evaluate(() => {
+    const viewport = document.querySelector("[data-testid='link-board-viewport']");
+    if (!viewport) throw new Error("Missing link board viewport");
+    return {
+      clientWidth: viewport.clientWidth,
+      clientHeight: viewport.clientHeight,
+      scrollWidth: viewport.scrollWidth,
+      scrollHeight: viewport.scrollHeight,
+      scrollLeft: viewport.scrollLeft,
+      scrollTop: viewport.scrollTop,
+    };
+  });
+
+  expect(
+    before.scrollWidth > before.clientWidth || before.scrollHeight > before.clientHeight,
+    "large board should be pannable in at least one axis",
+  ).toBe(true);
+
+  const viewportBox = await page.getByTestId("link-board-viewport").boundingBox();
+  expect(viewportBox).not.toBeNull();
+  await page.mouse.move(viewportBox!.x + viewportBox!.width / 2, viewportBox!.y + viewportBox!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(viewportBox!.x + viewportBox!.width / 2 - 120, viewportBox!.y + viewportBox!.height / 2 - 80);
+  await page.mouse.up();
+
+  const after = await page.evaluate(() => {
+    const viewport = document.querySelector("[data-testid='link-board-viewport']");
+    if (!viewport) throw new Error("Missing link board viewport");
+    return {
+      scrollLeft: viewport.scrollLeft,
+      scrollTop: viewport.scrollTop,
+    };
+  });
+
+  expect(after.scrollLeft + after.scrollTop).toBeGreaterThan(before.scrollLeft + before.scrollTop);
 });
 
 test("legacy game routes remain reachable", async ({ page }) => {
