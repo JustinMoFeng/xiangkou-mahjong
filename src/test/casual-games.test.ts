@@ -6,8 +6,11 @@ import {
   findLinkPath,
   selectLinkTile,
   shuffleRemainingLinkTiles,
+  type LinkGameState,
   type LinkTile,
 } from "../link-match/engine";
+import { createLinkLevelCells, getLinkLevelPreset, LINK_LEVEL_PRESETS } from "../link-match/levels";
+import { LINK_TILE_CODES } from "../link-match/patterns";
 import {
   createYangGame,
   createYangStateForTest,
@@ -26,6 +29,39 @@ function yangTile(id: string, code: CasualTileCode, x: number, y: number, layer:
 }
 
 describe("mahjong link match rules", () => {
+  it("defines five level presets with even playable cells", () => {
+    expect(LINK_LEVEL_PRESETS).toHaveLength(6);
+    expect(LINK_LEVEL_PRESETS.map((level) => level.id)).toEqual(["wall", "courtyard", "diamond", "stairs", "expert", "endless"]);
+    expect(LINK_LEVEL_PRESETS.every((level) => createLinkLevelCells(level, 7).cells.length % 2 === 0)).toBe(true);
+    expect(
+      LINK_LEVEL_PRESETS.every((level) =>
+        createLinkLevelCells(level, 7).cells.every(
+          (cell) => cell.row >= 0 && cell.row < level.rows && cell.col >= 0 && cell.col < level.columns,
+        ),
+      ),
+    ).toBe(true);
+  });
+
+  it("uses a visually mixed link tile palette for early difficulties", () => {
+    expect(LINK_TILE_CODES.slice(0, 8)).toEqual(["m1", "p5", "s1", "east", "red", "green", "m9", "p1"]);
+    expect(new Set(LINK_TILE_CODES.slice(0, 8).map((code) => code[0]))).toHaveLength(6);
+  });
+
+  it("creates a shaped level from preset cells instead of a full rectangle", () => {
+    const level = getLinkLevelPreset("courtyard");
+    const state = createLinkGame(17, 0, level);
+
+    expect(state.columns).toBe(8);
+    expect(state.rows).toBe(8);
+    expect(state.tiles.length % 2).toBe(0);
+    expect(state.tiles.length).toBeLessThanOrEqual(64);
+    expect(new Set(state.tiles.map((tile) => tile.code)).size).toBeLessThanOrEqual(8);
+    expect(state.pairCount).toBe(state.tiles.length / 2);
+    expect(state.timeLimitSeconds).toBe(12 * 60);
+    expect(state.hintsRemaining).toBe(5);
+    expect(state.shufflesRemaining).toBe(3);
+  });
+
   it("connects matching tiles on a straight line", () => {
     const first = linkTile("a", "m1", 0, 0);
     const second = linkTile("b", "m1", 0, 3);
@@ -144,6 +180,45 @@ describe("mahjong link match rules", () => {
 
     expect(afterCodes).toEqual(beforeCodes);
     expect(findAnyLink(shuffled.tiles)).toBeDefined();
+  });
+
+  it("auto-shuffles after a successful match when the remaining board has no links", () => {
+    const state: LinkGameState = {
+      ...createLinkGame(1, 0),
+      rows: 4,
+      columns: 5,
+      cells: [
+        { row: 3, col: 0 },
+        { row: 3, col: 1 },
+        { row: 1, col: 1 },
+        { row: 1, col: 3 },
+      ],
+      pairCount: 2,
+      tiles: [
+        linkTile("match-a", "m1", 3, 0),
+        linkTile("match-b", "m1", 3, 1),
+        linkTile("left", "p1", 1, 1),
+        linkTile("right", "p1", 1, 3),
+        linkTile("block-mid", "s1", 1, 2),
+        linkTile("block-top-left", "s2", 0, 1),
+        linkTile("block-top-right", "s3", 0, 3),
+        linkTile("block-bottom-left", "s4", 2, 1),
+        linkTile("block-bottom-right", "s5", 2, 3),
+      ],
+      removedPairs: 0,
+      shuffleCount: 0,
+    };
+    const remainingBefore = state.tiles
+      .filter((tile) => tile.id !== "match-a" && tile.id !== "match-b")
+      .map((tile) => tile.code)
+      .sort();
+
+    const after = selectLinkTile(selectLinkTile(state, "match-a", 10), "match-b", 11, 99);
+
+    expect(after.removedPairs).toBe(1);
+    expect(after.shuffleCount).toBe(1);
+    expect(after.tiles.filter((tile) => !tile.removed).map((tile) => tile.code).sort()).toEqual(remainingBefore);
+    expect(findAnyLink(after.tiles, after.rows, after.columns)).toBeDefined();
   });
 });
 

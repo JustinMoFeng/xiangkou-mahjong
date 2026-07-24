@@ -1,8 +1,10 @@
-import { CASUAL_TILE_CODES, shuffleWithSeed, type CasualTileCode } from "../casual/tiles";
+import { shuffleWithSeed, type CasualTileCode } from "../casual/tiles";
+import { createLinkLevelCells, LINK_LEVEL_PRESETS, type LinkCell, type LinkLayoutKind, type LinkLevelPreset } from "./levels";
+import { LINK_TILE_CODES } from "./patterns";
 
 export const LINK_COLUMNS = 8;
 export const LINK_ROWS = 6;
-export const LINK_PAIR_COUNT = (LINK_COLUMNS * LINK_ROWS) / 2;
+export const LINK_PAIR_COUNT = 24;
 
 export type LinkTile = {
   id: string;
@@ -26,6 +28,20 @@ export type LinkHint = {
 export type LinkGameStatus = "playing" | "won";
 
 export type LinkGameState = {
+  levelId: string;
+  levelName: string;
+  endless: boolean;
+  endlessRound: number;
+  layoutKind: LinkLayoutKind;
+  rows: number;
+  columns: number;
+  cells: LinkCell[];
+  pairCount: number;
+  tileKindCount: number;
+  timeLimitSeconds: number;
+  hintsRemaining: number;
+  shufflesRemaining: number;
+  timedOut: boolean;
   tiles: LinkTile[];
   selectedId?: string;
   hintIds: string[];
@@ -37,6 +53,11 @@ export type LinkGameState = {
   status: LinkGameStatus;
   seed: number;
   shuffleCount: number;
+};
+
+export type LinkCarryItems = {
+  hintsRemaining?: number;
+  shufflesRemaining?: number;
 };
 
 type Direction = "up" | "right" | "down" | "left";
@@ -157,7 +178,11 @@ export function findLinkPath(
   return undefined;
 }
 
-export function findAnyLink(tiles: readonly LinkTile[]): LinkHint | undefined {
+export function findAnyLink(
+  tiles: readonly LinkTile[],
+  rows = LINK_ROWS,
+  columns = LINK_COLUMNS,
+): LinkHint | undefined {
   const activeTiles = tiles.filter((tile) => !tile.removed);
 
   for (let firstIndex = 0; firstIndex < activeTiles.length; firstIndex += 1) {
@@ -168,7 +193,7 @@ export function findAnyLink(tiles: readonly LinkTile[]): LinkHint | undefined {
         continue;
       }
 
-      const path = findLinkPath(tiles, first, second);
+      const path = findLinkPath(tiles, first, second, rows, columns);
       if (path) {
         return { firstId: first.id, secondId: second.id, path };
       }
@@ -178,17 +203,25 @@ export function findAnyLink(tiles: readonly LinkTile[]): LinkHint | undefined {
   return undefined;
 }
 
-function buildTiles(codes: readonly CasualTileCode[]): LinkTile[] {
-  return codes.map((code, index) => ({
-    id: `link-${index}-${code}`,
-    code,
-    row: Math.floor(index / LINK_COLUMNS),
-    col: index % LINK_COLUMNS,
+function buildTiles(codes: readonly CasualTileCode[], cells: readonly LinkCell[]): LinkTile[] {
+  return cells.map((cell, index) => ({
+    id: `link-${index}-${codes[index]}`,
+    code: codes[index],
+    row: cell.row,
+    col: cell.col,
     removed: false,
   }));
 }
 
-function forceFirstAvailablePair(tiles: readonly LinkTile[]): LinkTile[] {
+function createPairCodes(pairCount: number, tileKindCount: number): CasualTileCode[] {
+  const codes = LINK_TILE_CODES.slice(0, Math.max(1, Math.min(tileKindCount, LINK_TILE_CODES.length)));
+  return Array.from({ length: pairCount }).flatMap((_, index) => {
+    const code = codes[index % codes.length];
+    return [code, code];
+  });
+}
+
+function forceFirstAvailablePair(tiles: readonly LinkTile[], rows = LINK_ROWS, columns = LINK_COLUMNS): LinkTile[] {
   const activeTiles = tiles.filter((tile) => !tile.removed);
   const byCode = new Map<CasualTileCode, LinkTile[]>();
   for (const tile of activeTiles) {
@@ -219,7 +252,7 @@ function forceFirstAvailablePair(tiles: readonly LinkTile[]): LinkTile[] {
 
       const trialFirst = trial.find((tile) => tile.id === first.id);
       const trialSecond = trial.find((tile) => tile.id === second.id);
-      if (trialFirst && trialSecond && findLinkPath(trial, trialFirst, trialSecond)) {
+      if (trialFirst && trialSecond && findLinkPath(trial, trialFirst, trialSecond, rows, columns)) {
         return trial;
       }
     }
@@ -228,20 +261,46 @@ function forceFirstAvailablePair(tiles: readonly LinkTile[]): LinkTile[] {
   return [...tiles];
 }
 
-export function createLinkGame(seed = Date.now(), startedAt = Date.now()): LinkGameState {
-  const pairCodes = CASUAL_TILE_CODES.slice(0, LINK_PAIR_COUNT).flatMap((code) => [code, code]);
-  let tiles = buildTiles(shuffleWithSeed(pairCodes, seed));
+export function createLinkGame(
+  seed = Date.now(),
+  startedAt = Date.now(),
+  level = LINK_LEVEL_PRESETS[0],
+  endlessRound = 1,
+  carryItems?: LinkCarryItems,
+): LinkGameState {
+  const { cells, layoutKind } = createLinkLevelCells(level, seed + endlessRound * 17);
+  if (cells.length % 2 !== 0) {
+    throw new Error(`Link level ${level.id} must contain an even number of cells.`);
+  }
+
+  const pairCount = cells.length / 2;
+  const pairCodes = createPairCodes(pairCount, level.tileKindCount);
+  let tiles = buildTiles(shuffleWithSeed(pairCodes, seed), cells);
   let attempt = 1;
 
-  while (!findAnyLink(tiles) && attempt < 80) {
-    tiles = buildTiles(shuffleWithSeed(pairCodes, seed + attempt * 97));
+  while (!findAnyLink(tiles, level.rows, level.columns) && attempt < 80) {
+    tiles = buildTiles(shuffleWithSeed(pairCodes, seed + attempt * 97), cells);
     attempt += 1;
   }
-  if (!findAnyLink(tiles)) {
-    tiles = forceFirstAvailablePair(tiles);
+  if (!findAnyLink(tiles, level.rows, level.columns)) {
+    tiles = forceFirstAvailablePair(tiles, level.rows, level.columns);
   }
 
   return {
+    levelId: level.id,
+    levelName: level.name,
+    endless: Boolean(level.endless),
+    endlessRound,
+    layoutKind,
+    rows: level.rows,
+    columns: level.columns,
+    cells,
+    pairCount,
+    tileKindCount: level.tileKindCount,
+    timeLimitSeconds: level.timeLimitSeconds,
+    hintsRemaining: carryItems?.hintsRemaining ?? level.hintLimit,
+    shufflesRemaining: carryItems?.shufflesRemaining ?? level.shuffleLimit,
+    timedOut: false,
     tiles,
     hintIds: [],
     lastPath: [],
@@ -262,7 +321,12 @@ function clearTransient(state: LinkGameState): LinkGameState {
   };
 }
 
-export function selectLinkTile(state: LinkGameState, tileId: string, now = Date.now()): LinkGameState {
+export function selectLinkTile(
+  state: LinkGameState,
+  tileId: string,
+  now = Date.now(),
+  autoShuffleSeed = now,
+): LinkGameState {
   if (state.status !== "playing") {
     return state;
   }
@@ -282,14 +346,14 @@ export function selectLinkTile(state: LinkGameState, tileId: string, now = Date.
     return { ...base, selectedId: tileId };
   }
 
-  const path = findLinkPath(base.tiles, selected, tile);
+  const path = findLinkPath(base.tiles, selected, tile, base.rows, base.columns);
   if (!path) {
     return { ...base, selectedId: tileId, moves: base.moves + 1 };
   }
 
   const removedPairs = base.removedPairs + 1;
-  const status: LinkGameStatus = removedPairs >= LINK_PAIR_COUNT ? "won" : "playing";
-  return {
+  const status: LinkGameStatus = removedPairs >= base.pairCount ? "won" : "playing";
+  const matchedState: LinkGameState = {
     ...base,
     tiles: base.tiles.map((item) =>
       item.id === selected.id || item.id === tile.id
@@ -306,14 +370,26 @@ export function selectLinkTile(state: LinkGameState, tileId: string, now = Date.
     status,
     endedAt: status === "won" ? now : undefined,
   };
+
+  if (matchedState.status === "playing" && !findAnyLink(matchedState.tiles, matchedState.rows, matchedState.columns)) {
+    return {
+      ...shuffleRemainingLinkTiles(matchedState, autoShuffleSeed, false),
+      lastPath: path,
+    };
+  }
+
+  return matchedState;
 }
 
 export function revealLinkHint(state: LinkGameState): LinkGameState {
   if (state.status !== "playing") {
     return state;
   }
+  if (state.hintsRemaining <= 0) {
+    return { ...state, hintIds: [], lastPath: [] };
+  }
 
-  const hint = findAnyLink(state.tiles);
+  const hint = findAnyLink(state.tiles, state.rows, state.columns);
   if (!hint) {
     return { ...state, hintIds: [], lastPath: [] };
   }
@@ -323,11 +399,15 @@ export function revealLinkHint(state: LinkGameState): LinkGameState {
     selectedId: undefined,
     hintIds: [hint.firstId, hint.secondId],
     lastPath: hint.path,
+    hintsRemaining: state.hintsRemaining - 1,
   };
 }
 
-export function shuffleRemainingLinkTiles(state: LinkGameState, seed = Date.now()): LinkGameState {
+export function shuffleRemainingLinkTiles(state: LinkGameState, seed = Date.now(), consumeManualShuffle = true): LinkGameState {
   if (state.status !== "playing") {
+    return state;
+  }
+  if (consumeManualShuffle && state.shufflesRemaining <= 0) {
     return state;
   }
 
@@ -354,7 +434,7 @@ export function shuffleRemainingLinkTiles(state: LinkGameState, seed = Date.now(
   });
 
   let attempt = 1;
-  while (!findAnyLink(nextTiles) && attempt < 120) {
+  while (!findAnyLink(nextTiles, state.rows, state.columns) && attempt < 120) {
     shuffled = shuffleWithSeed(codes, seed + attempt * 131);
     nextTiles = state.tiles.map((tile) => {
       const remainingIndex = remaining.findIndex((item) => item.id === tile.id);
@@ -371,8 +451,8 @@ export function shuffleRemainingLinkTiles(state: LinkGameState, seed = Date.now(
     });
     attempt += 1;
   }
-  if (!findAnyLink(nextTiles)) {
-    nextTiles = forceFirstAvailablePair(nextTiles);
+  if (!findAnyLink(nextTiles, state.rows, state.columns)) {
+    nextTiles = forceFirstAvailablePair(nextTiles, state.rows, state.columns);
   }
 
   return {
@@ -382,5 +462,6 @@ export function shuffleRemainingLinkTiles(state: LinkGameState, seed = Date.now(
     hintIds: [],
     lastPath: [],
     shuffleCount: state.shuffleCount + 1,
+    shufflesRemaining: consumeManualShuffle ? state.shufflesRemaining - 1 : state.shufflesRemaining,
   };
 }
