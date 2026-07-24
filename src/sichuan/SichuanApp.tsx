@@ -513,41 +513,43 @@ function SichuanRulesHelpOverlay({ onClose }: { onClose: () => void }) {
           </button>
         </div>
 
-        <div className="rules-help-section">
-          <h3>基本规则</h3>
-          <div className="rules-help-list">
-            <SichuanRuleRow name="开局定缺" value="必选" description="每家选择一门缺门。手里仍有缺门牌时不能胡牌。" />
-            <SichuanRuleRow name="只碰杠不吃" value="川麻" description="支持碰、直杠、暗杠、补杠；不提供吃牌。" />
-            <SichuanRuleRow name="血战到底" value="续局" description="胡牌者亮牌离场，其余玩家继续，直到只剩一家或牌墙摸完。" />
+        <div className="rules-help-scroll">
+          <div className="rules-help-section">
+            <h3>基本规则</h3>
+            <div className="rules-help-list">
+              <SichuanRuleRow name="开局定缺" value="必选" description="每家选择一门缺门。手里仍有缺门牌时不能胡牌。" />
+              <SichuanRuleRow name="只碰杠不吃" value="川麻" description="支持碰、直杠、暗杠、补杠；不提供吃牌。" />
+              <SichuanRuleRow name="血战到底" value="续局" description="胡牌者亮牌离场，其余玩家继续，直到只剩一家或牌墙摸完。" />
+            </div>
           </div>
-        </div>
 
-        <div className="rules-help-section">
-          <h3>番型</h3>
-          <div className="rules-help-list">
-            <SichuanRuleRow name="平胡" value="0 番" description="标准 4 面子 1 将，无额外番型。" />
-            <SichuanRuleRow name="对对胡" value="+1 番" description="全部面子都是刻子或杠子。" />
-            <SichuanRuleRow name="七对" value="+2 番" description="14 张牌组成 7 个对子。" />
-            <SichuanRuleRow name="清一色" value="+2 番" description="所有牌来自同一种花色。" />
-            <SichuanRuleRow name="将对" value="+2 番" description="对对胡且所有牌都是 2、5、8。" />
-            <SichuanRuleRow name="金钩钓" value="+1 番" description="四组副露后单吊胡牌。" />
-            <SichuanRuleRow name="根" value="每根 +1" description="同一张牌出现 4 张计一根，七对中四张也计根。" />
+          <div className="rules-help-section">
+            <h3>番型</h3>
+            <div className="rules-help-list">
+              <SichuanRuleRow name="平胡" value="0 番" description="标准 4 面子 1 将，无额外番型。" />
+              <SichuanRuleRow name="对对胡" value="+1 番" description="全部面子都是刻子或杠子。" />
+              <SichuanRuleRow name="七对" value="+2 番" description="14 张牌组成 7 个对子。" />
+              <SichuanRuleRow name="清一色" value="+2 番" description="所有牌来自同一种花色。" />
+              <SichuanRuleRow name="将对" value="+2 番" description="对对胡且所有牌都是 2、5、8。" />
+              <SichuanRuleRow name="金钩钓" value="+1 番" description="四组副露后单吊胡牌。" />
+              <SichuanRuleRow name="根" value="每根 +1" description="同一张牌出现 4 张计一根，七对中四张也计根。" />
+            </div>
           </div>
-        </div>
 
-        <div className="rules-help-section">
-          <h3>结算项</h3>
-          <div className="rules-help-list">
-            <SichuanRuleRow name="自摸" value="+1 番" description="自己摸到胡牌张。" />
-            <SichuanRuleRow name="杠上开花 / 杠上炮" value="+1 番" description="杠后补摸胡牌，或杠后打出的牌点炮。" />
-            <SichuanRuleRow name="抢杠胡" value="+1 番" description="别人补杠时用那张牌胡。" />
-            <SichuanRuleRow name="海底" value="+1 番" description="最后一张牌自摸或点炮。" />
-            <SichuanRuleRow name="天胡 / 地胡" value="+6 番" description="开局极早阶段形成的高番胡牌。" />
+          <div className="rules-help-section">
+            <h3>结算项</h3>
+            <div className="rules-help-list">
+              <SichuanRuleRow name="自摸" value="+1 番" description="自己摸到胡牌张。" />
+              <SichuanRuleRow name="杠上开花 / 杠上炮" value="+1 番" description="杠后补摸胡牌，或杠后打出的牌点炮。" />
+              <SichuanRuleRow name="抢杠胡" value="+1 番" description="别人补杠时用那张牌胡。" />
+              <SichuanRuleRow name="海底" value="+1 番" description="最后一张牌自摸或点炮。" />
+              <SichuanRuleRow name="天胡 / 地胡" value="+6 番" description="开局极早阶段形成的高番胡牌。" />
+            </div>
           </div>
-        </div>
 
-        <div className="rules-help-note">
-          分数 = 底分 <strong>{BASE_POINTS}</strong> x 2^番，最高 <strong>{MAX_FAN} 番</strong>。流局会查大叫、查花猪，并退还未听/花猪相关杠分。
+          <div className="rules-help-note">
+            分数 = 底分 <strong>{BASE_POINTS}</strong> x 2^番，最高 <strong>{MAX_FAN} 番</strong>。流局会查大叫、查花猪，并退还未听/花猪相关杠分。
+          </div>
         </div>
       </section>
     </div>

@@ -658,6 +658,9 @@ button:disabled {
   width: min(520px, 100%);
   max-height: calc(100% - 8px);
   overflow-y: auto;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 216, 137, 0.55) rgba(255, 247, 227, 0.06);
   padding: clamp(18px, 3vw, 26px);
   border: 1px solid rgba(215, 163, 72, 0.48);
   border-radius: 8px;
@@ -665,6 +668,29 @@ button:disabled {
     linear-gradient(145deg, rgba(255, 247, 227, 0.1), transparent 34%),
     #14241c;
   box-shadow: 0 22px 70px rgba(0, 0, 0, 0.42);
+}
+
+.result-card::-webkit-scrollbar,
+.rules-help-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+
+.result-card::-webkit-scrollbar-track,
+.rules-help-scroll::-webkit-scrollbar-track {
+  border-radius: 999px;
+  background: rgba(255, 247, 227, 0.055);
+}
+
+.result-card::-webkit-scrollbar-thumb,
+.rules-help-scroll::-webkit-scrollbar-thumb {
+  border: 2px solid rgba(20, 36, 28, 0.96);
+  border-radius: 999px;
+  background: rgba(255, 216, 137, 0.58);
+}
+
+.result-card::-webkit-scrollbar-thumb:hover,
+.rules-help-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 216, 137, 0.82);
 }
 
 .result-card h2 {
@@ -830,7 +856,9 @@ button:disabled {
 .rules-help-card {
   width: min(660px, 100%);
   display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 16px;
+  overflow: hidden;
 }
 
 .rules-help-header {
@@ -842,6 +870,18 @@ button:disabled {
 
 .rules-help-header h2 {
   font-size: clamp(1.42rem, 3.6vw, 2.3rem);
+}
+
+.rules-help-scroll {
+  display: grid;
+  gap: 16px;
+  min-height: 0;
+  max-height: min(68vh, 560px);
+  overflow-y: auto;
+  padding-right: 4px;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 216, 137, 0.55) rgba(255, 247, 227, 0.06);
 }
 
 .rules-help-section {
