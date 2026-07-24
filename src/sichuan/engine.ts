@@ -7,7 +7,7 @@ import {
   scoreWin,
   type ScoreContext,
 } from "./rules";
-import { createWall, shuffleTiles, sortTiles, tileSortValue } from "./tiles";
+import { createWall, shuffleTiles, sortTiles, tileSortValue, tileSuitPrefix } from "./tiles";
 import type {
   ClaimOption,
   GameState,
@@ -126,6 +126,9 @@ export function discardTile(state: GameState, seat: Seat, tileId: string): GameS
   const player = state.players[seat];
   const tile = player.hand.find((item) => item.id === tileId);
   if (!tile) {
+    return state;
+  }
+  if (!canDiscardFromMissingSuit(player, tile)) {
     return state;
   }
 
@@ -285,6 +288,9 @@ export function declareConcealedKong(state: GameState, seat: Seat, code: TileCod
     return state;
   }
   const player = state.players[seat];
+  if (isMissingSuitCode(player, code)) {
+    return state;
+  }
   if (player.hand.filter((tile) => tile.code === code).length < 4) {
     return state;
   }
@@ -311,6 +317,9 @@ export function declareAddedKong(state: GameState, seat: Seat, code: TileCode): 
     return state;
   }
   const player = state.players[seat];
+  if (isMissingSuitCode(player, code)) {
+    return state;
+  }
   const pong = player.melds.find((meld) => meld.kind === "pong" && meld.code === code);
   const handTile = player.hand.find((tile) => tile.code === code);
   if (!pong || !handTile) {
@@ -507,31 +516,36 @@ function resolveDiscard(state: GameState, from: Seat, tile: Tile, fromKong: bool
   const others = orderedSeatsAfter(from).filter((seat) => !state.players[seat].hasWon);
   const winnableSeats = others.filter((seat) => canWinOn(state.players[seat], tile));
   const humanCanWin = winnableSeats.includes(HUMAN_SEAT);
+  const botWinners = winnableSeats.filter((seat) => state.players[seat].type === "bot");
   const humanMeld = getMeldOptionsForSeat(state, HUMAN_SEAT, from, tile);
 
-  if (humanCanWin || humanMeld.length > 0) {
-    const options: ClaimOption[] = [];
-    if (humanCanWin) {
-      options.push({
+  if (humanCanWin) {
+    const options: ClaimOption[] = [
+      {
         id: `win-${tile.id}`,
         action: "win",
         label: "胡",
         handTileIds: [],
         previewTileCodes: [tile.code],
-      });
+      },
+    ];
+    if (botWinners.length === 0) {
+      options.push(...humanMeld);
     }
-    options.push(...humanMeld);
 
     const next = cloneGameState(state);
-    next.pendingClaim = { id: createId("claim"), from, tile, seat: HUMAN_SEAT, options };
-    next.recentAction = humanCanWin
-      ? `你可以胡 ${state.players[from].name} 的 ${tile.label}`
-      : `你可以操作 ${state.players[from].name} 打出的 ${tile.label}`;
+    next.pendingClaim = {
+      id: createId("claim"),
+      from,
+      tile,
+      seat: HUMAN_SEAT,
+      options,
+    };
+    next.recentAction = `你可以胡 ${state.players[from].name} 的 ${tile.label}`;
     next.logs = addLog(next.logs, next.recentAction);
     return next;
   }
 
-  const botWinners = winnableSeats.filter((seat) => state.players[seat].type === "bot");
   if (botWinners.length > 0) {
     return finishWin(state, {
       winner: botWinners[0],
@@ -541,6 +555,14 @@ function resolveDiscard(state: GameState, from: Seat, tile: Tile, fromKong: bool
       kind: "discard",
       isGangPao: fromKong,
     });
+  }
+
+  if (humanMeld.length > 0) {
+    const next = cloneGameState(state);
+    next.pendingClaim = { id: createId("claim"), from, tile, seat: HUMAN_SEAT, options: humanMeld };
+    next.recentAction = `你可以操作 ${state.players[from].name} 打出的 ${tile.label}`;
+    next.logs = addLog(next.logs, next.recentAction);
+    return next;
   }
 
   return continueAfterClaims(state, from, tile, fromKong);
@@ -834,14 +856,25 @@ function canWinOn(player: Player, tile: Tile): boolean {
   if (player.hasWon || tile.suit === player.missingSuit) {
     return false;
   }
-  if (player.hand.some((item) => item.suit === player.missingSuit)) {
+  if (!isCleanOfMissing(player)) {
     return false;
   }
   return checkWin([...player.hand, tile], player.melds);
 }
 
+function canDiscardFromMissingSuit(player: Player, tile: Tile): boolean {
+  return isCleanOfMissing(player) || tile.suit === player.missingSuit;
+}
+
 function isCleanOfMissing(player: Player): boolean {
+  if (!player.missingSuit) {
+    return true;
+  }
   return !player.hand.some((tile) => tile.suit === player.missingSuit);
+}
+
+function isMissingSuitCode(player: Player, code: TileCode): boolean {
+  return Boolean(player.missingSuit && tileSuitPrefix(code) === player.missingSuit);
 }
 
 function isHuazhuHand(player: Player): boolean {
@@ -863,7 +896,9 @@ function concealedKongCodes(player: Player): TileCode[] {
   for (const tile of player.hand) {
     counts.set(tile.code, (counts.get(tile.code) ?? 0) + 1);
   }
-  return [...counts.entries()].filter(([, value]) => value === 4).map(([code]) => code);
+  return [...counts.entries()]
+    .filter(([code, value]) => value === 4 && !isMissingSuitCode(player, code))
+    .map(([code]) => code);
 }
 
 function addedKongCodes(player: Player): TileCode[] {
@@ -873,6 +908,7 @@ function addedKongCodes(player: Player): TileCode[] {
   return player.melds
     .filter((meld) => meld.kind === "pong")
     .map((meld) => meld.code)
+    .filter((code) => !isMissingSuitCode(player, code))
     .filter((code) => player.hand.some((tile) => tile.code === code));
 }
 

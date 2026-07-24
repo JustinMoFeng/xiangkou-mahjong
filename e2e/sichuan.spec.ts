@@ -1,4 +1,108 @@
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
+
+type SuitPrefix = "m" | "p" | "s";
+type TileCode = `${SuitPrefix}${1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}`;
+type Tile = {
+  id: string;
+  code: TileCode;
+  suit: SuitPrefix;
+  rank: number;
+  label: string;
+  shortLabel: string;
+};
+
+const SICHUAN_STORAGE_KEY = "xiangkou-sichuan-save-v1";
+
+function tile(code: TileCode, copy = 0): Tile {
+  const suit = code[0] as SuitPrefix;
+  const rank = Number(code.slice(1));
+  const suffix = suit === "m" ? "万" : suit === "p" ? "筒" : "条";
+  return {
+    id: `${code}-${copy}`,
+    code,
+    suit,
+    rank,
+    label: `${rank}${suffix}`,
+    shortLabel: `${rank}`,
+  };
+}
+
+function tilePicker(): (codes: TileCode[]) => Tile[] {
+  const used = new Map<TileCode, number>();
+  return (codes) =>
+    codes.map((code) => {
+      const copy = used.get(code) ?? 0;
+      used.set(code, copy + 1);
+      return tile(code, copy);
+    });
+}
+
+function player(
+  seat: 0 | 1 | 2 | 3,
+  name: string,
+  hand: Tile[],
+  missingSuit: SuitPrefix,
+  type: "human" | "bot" = seat === 0 ? "human" : "bot",
+) {
+  return {
+    seat,
+    name,
+    type,
+    hand,
+    drawnTileId: undefined,
+    melds: [],
+    discards: [] as Tile[],
+    score: 100,
+    missingSuit,
+    hasWon: false,
+    winInfo: undefined,
+    isTenpai: false,
+    isHuazhu: false,
+  };
+}
+
+async function loadSavedSichuanState(page: Page, state: unknown) {
+  await page.addInitScript(
+    ({ key, savedState }) => {
+      window.localStorage.clear();
+      window.localStorage.setItem(
+        key,
+        JSON.stringify({
+          version: 1,
+          savedAt: Date.now(),
+          state: savedState,
+        }),
+      );
+    },
+    { key: SICHUAN_STORAGE_KEY, savedState: state },
+  );
+  await page.goto("/play/sichuan/bot");
+}
+
+function basePlayingState() {
+  const take = tilePicker();
+  return {
+    players: [
+      player(0, "你", take(["s1", "m5", "m5", "m1", "m2", "m4", "m8", "m9", "p1", "p3", "p4", "p6", "p8"]), "s"),
+      player(1, "下家阿蜀", take(["m5", "m3", "m4", "m6", "m7", "p1", "p2", "p3", "p5", "p6", "p7", "p8", "p9"]), "s"),
+      player(2, "对家幺鸡", take(["s2", "m1", "m2", "m3", "m4"]), "s"),
+      player(3, "上家老川", take(["s3", "m6", "m7", "m8", "m9"]), "s"),
+    ],
+    wall: take(["p4", "p5", "p6", "p7", "p8", "p9", "m1", "m2", "m3", "m4"]),
+    currentSeat: 0,
+    dealerSeat: 0,
+    roundNumber: 1,
+    phase: "playing",
+    missingChosen: true,
+    awaitingDiscard: true,
+    gangLog: [],
+    drawReplacement: false,
+    recentAction: "测试局面：有缺先打缺。",
+    logs: [{ id: "log-e2e", text: "测试局面：有缺先打缺。" }],
+    turn: 4,
+    roomId: "LOCAL-SICHUAN",
+  };
+}
 
 test("sichuan mode: choose missing suit, then play begins", async ({ page }) => {
   await page.goto("/play/sichuan/bot");
@@ -75,6 +179,88 @@ test("home page lets you pick a mode and routes by path", async ({ page }) => {
   await expect(page.getByLabel("定缺")).toBeVisible();
 });
 
+test("home and mode selection fit short mobile landscape browser viewports", async ({ page, browserName }) => {
+  test.skip(browserName !== "chromium", "short mobile viewport matrix only needs one Chromium project");
+
+  const assertHomeLayout = async (label: string, minCardHeight: number) => {
+    const layout = await page.evaluate(() => {
+      const rect = (selector: string) => {
+        const element = document.querySelector(selector);
+        if (!element) throw new Error(`Missing ${selector}`);
+        const bounds = element.getBoundingClientRect();
+        return {
+          left: bounds.left,
+          top: bounds.top,
+          right: bounds.right,
+          bottom: bounds.bottom,
+          width: bounds.width,
+          height: bounds.height,
+        };
+      };
+      const overlapArea = (first: ReturnType<typeof rect>, second: ReturnType<typeof rect>) =>
+        Math.max(0, Math.min(first.right, second.right) - Math.max(first.left, second.left)) *
+        Math.max(0, Math.min(first.bottom, second.bottom) - Math.max(first.top, second.top));
+      const insideViewport = (bounds: ReturnType<typeof rect>) =>
+        bounds.left >= -1 &&
+        bounds.top >= -1 &&
+        bounds.right <= window.innerWidth + 1 &&
+        bounds.bottom <= window.innerHeight + 1;
+      const cards = Array.from(document.querySelectorAll(".home-card")).map((element) => {
+        const bounds = element.getBoundingClientRect();
+        return {
+          left: bounds.left,
+          top: bounds.top,
+          right: bounds.right,
+          bottom: bounds.bottom,
+          width: bounds.width,
+          height: bounds.height,
+        };
+      });
+
+      return {
+        noOverflow:
+          document.documentElement.scrollWidth <= window.innerWidth + 1 &&
+          document.documentElement.scrollHeight <= window.innerHeight + 1,
+        frameInside: insideViewport(rect(".home-frame")),
+        cardsInside: cards.every(insideViewport),
+        cardCount: cards.length,
+        cardOverlap: cards.length >= 2 ? overlapArea(cards[0], cards[1]) : 0,
+        minCardHeight: Math.min(...cards.map((card) => card.height)),
+      };
+    });
+
+    expect(layout, label).toEqual({
+      noOverflow: true,
+      frameInside: true,
+      cardsInside: true,
+      cardCount: 2,
+      cardOverlap: 0,
+      minCardHeight: expect.any(Number),
+    });
+    expect(layout.minCardHeight, label).toBeGreaterThanOrEqual(minCardHeight);
+  };
+
+  for (const viewport of [
+    { width: 740, height: 320 },
+    { width: 802, height: 293 },
+  ]) {
+    await page.setViewportSize(viewport);
+
+    await page.goto("/");
+    const minCardHeight = viewport.height <= 300 ? 46 : 54;
+    await assertHomeLayout(`${viewport.width}x${viewport.height} home`, minCardHeight);
+
+    await page.getByRole("button", { name: "选择巷口麻将" }).click();
+    await expect(page).toHaveURL(/\/game\/xiangkou$/);
+    await assertHomeLayout(`${viewport.width}x${viewport.height} xiangkou`, minCardHeight);
+
+    await page.goto("/");
+    await page.getByRole("button", { name: /川麻/ }).click();
+    await expect(page).toHaveURL(/\/game\/sichuan$/);
+    await assertHomeLayout(`${viewport.width}x${viewport.height} sichuan`, minCardHeight);
+  }
+});
+
 test("legacy game routes remain reachable", async ({ page }) => {
   await page.goto("/classic");
   await expect(page.getByLabel("你的手牌")).toBeVisible();
@@ -98,4 +284,149 @@ test("sichuan rules help explains patterns and settlement", async ({ page }) => 
 
   await page.getByLabel("关闭帮助").click();
   await expect(dialog).toBeHidden();
+});
+
+test("sichuan missing-suit discard rule is enforced in the hand UI", async ({ page }) => {
+  await loadSavedSichuanState(page, basePlayingState());
+
+  const missingTile = page.locator(".hand-row .tile-button").filter({ has: page.locator('img[alt="1条"]') }).first();
+  const nonMissingTile = page.locator(".hand-row .tile-button").filter({ has: page.locator('img[alt="5万"]') }).first();
+
+  await expect(missingTile).toBeEnabled();
+  await expect(nonMissingTile).toBeDisabled();
+  await expect(nonMissingTile).toHaveAttribute("title", "先打完定缺花色");
+});
+
+test("sichuan can pong non-missing tiles before clearing the missing suit", async ({ page }) => {
+  const state = basePlayingState();
+  const discard = tile("m5", 2);
+  state.players[1].discards = [discard];
+  state.lastDiscard = { tile: discard, seat: 1 };
+  state.pendingClaim = {
+    id: "claim-e2e-pong",
+    from: 1,
+    tile: discard,
+    seat: 0,
+    options: [
+      {
+        id: "pong-e2e-m5",
+        action: "pong",
+        label: "碰",
+        handTileIds: [state.players[0].hand[1].id, state.players[0].hand[2].id],
+        previewTileCodes: ["m5", "m5", "m5"],
+      },
+    ],
+  };
+  state.awaitingDiscard = false;
+  state.recentAction = "你可以操作 下家阿蜀 打出的 5万";
+
+  await loadSavedSichuanState(page, state);
+
+  await expect(page.getByTestId("sc-claim-pong")).toBeVisible();
+  await page.getByTestId("sc-claim-pong").click();
+
+  await expect(page.locator(".recent-action")).toContainText("你碰了 下家阿蜀 的 5万");
+  await expect(page.getByLabel("副露").first()).toContainText("碰");
+  await expect(page.locator(".hand-row .tile-button").filter({ has: page.locator('img[alt="1条"]') }).first()).toBeEnabled();
+  await expect(page.locator(".hand-row .tile-button").filter({ has: page.locator('img[alt="1万"]') }).first()).toBeDisabled();
+});
+
+test("sichuan bot continues after a replacement draw from exposed kong", async ({ page }) => {
+  const take = tilePicker();
+  const state = basePlayingState();
+  state.players[2] = player(
+    2,
+    "对家幺鸡",
+    take(["m5", "m8", "m8", "m8", "s6", "s7", "s8", "s8"]),
+    "p",
+  );
+  state.players[2].drawnTileId = state.players[2].hand[state.players[2].hand.length - 1].id;
+  state.players[2].melds = [
+    {
+      kind: "kong-exposed",
+      from: 1,
+      code: "m7",
+      tiles: take(["m7", "m7", "m7", "m7"]),
+    },
+  ];
+  state.currentSeat = 2;
+  state.awaitingDiscard = true;
+  state.drawReplacement = true;
+  state.wall = take(["p8", "s5", "s3"]);
+  state.recentAction = "刮风：对家幺鸡直杠 7万，下家阿蜀付 2";
+  state.logs = [{ id: "log-e2e-kong", text: state.recentAction }];
+
+  await loadSavedSichuanState(page, state);
+
+  await expect(page.locator(".recent-action")).not.toContainText("刮风：对家幺鸡直杠 7万", { timeout: 2500 });
+  const saved = await page.evaluate((key) => JSON.parse(window.localStorage.getItem(key) ?? "{}")?.state, SICHUAN_STORAGE_KEY);
+  expect(saved.players[2].discards.length).toBeGreaterThan(0);
+  expect(saved.awaitingDiscard).toBe(false);
+});
+
+test("sichuan short mobile landscape keeps the hand playable under browser chrome", async ({ page, browserName }) => {
+  test.skip(browserName !== "chromium", "short mobile viewport matrix only needs one Chromium project");
+
+  for (const viewport of [
+    { width: 740, height: 320 },
+    { width: 802, height: 293 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await loadSavedSichuanState(page, basePlayingState());
+
+    const layout = await page.evaluate(() => {
+      const rect = (selector: string) => {
+        const element = document.querySelector(selector);
+        if (!element) throw new Error(`Missing ${selector}`);
+        const bounds = element.getBoundingClientRect();
+        return {
+          left: bounds.left,
+          top: bounds.top,
+          right: bounds.right,
+          bottom: bounds.bottom,
+          width: bounds.width,
+          height: bounds.height,
+        };
+      };
+      const overlapArea = (first: ReturnType<typeof rect>, second: ReturnType<typeof rect>) =>
+        Math.max(0, Math.min(first.right, second.right) - Math.max(first.left, second.left)) *
+        Math.max(0, Math.min(first.bottom, second.bottom) - Math.max(first.top, second.top));
+      const insideViewport = (bounds: ReturnType<typeof rect>) =>
+        bounds.left >= -1 &&
+        bounds.top >= -1 &&
+        bounds.right <= window.innerWidth + 1 &&
+        bounds.bottom <= window.innerHeight + 1;
+
+      const hand = rect(".hand-row");
+      const command = rect(".command-bar");
+      const topBar = rect(".top-bar");
+      const table = rect(".mahjong-table");
+      const firstTile = rect(".hand-row .tile-button");
+
+      return {
+        noOverflow:
+          document.documentElement.scrollWidth <= window.innerWidth + 1 &&
+          document.documentElement.scrollHeight <= window.innerHeight + 1,
+        tableInside: insideViewport(table),
+        topInside: insideViewport(topBar),
+        handInside: insideViewport(hand),
+        commandInside: insideViewport(command),
+        commandClearOfHand: overlapArea(command, hand) === 0,
+        topClearOfTableCenter: topBar.bottom <= table.top + 32,
+        tileHeight: firstTile.height,
+      };
+    });
+
+    expect(layout, `${viewport.width}x${viewport.height}`).toEqual({
+      noOverflow: true,
+      tableInside: true,
+      topInside: true,
+      handInside: true,
+      commandInside: true,
+      commandClearOfHand: true,
+      topClearOfTableCenter: true,
+      tileHeight: expect.any(Number),
+    });
+    expect(layout.tileHeight, `${viewport.width}x${viewport.height}`).toBeGreaterThanOrEqual(41);
+  }
 });

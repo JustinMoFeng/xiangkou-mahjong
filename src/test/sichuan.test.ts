@@ -8,6 +8,7 @@ import {
 } from "../sichuan/rules";
 import {
   chooseMissingSuit,
+  claimMeld,
   createNewGame,
   createNextRound,
   declareConcealedKong,
@@ -34,6 +35,20 @@ function tiles(codes: TileCode[]): Tile[] {
     }
     return tile;
   });
+}
+
+function createTilePicker(): (codes: TileCode[]) => Tile[] {
+  const used = new Map<TileCode, number>();
+  return (codes) =>
+    codes.map((code) => {
+      const copy = used.get(code) ?? 0;
+      used.set(code, copy + 1);
+      const tile = tilePool.find((item) => item.code === code && item.id.endsWith(`-${copy}`));
+      if (!tile) {
+        throw new Error(`Missing tile ${code} copy ${copy}`);
+      }
+      return tile;
+    });
 }
 
 describe("sichuan rules — win detection", () => {
@@ -147,6 +162,50 @@ describe("sichuan engine — flow", () => {
     expect(options).toHaveLength(0);
   });
 
+  it("blocks non-missing discards while the player still holds the missing suit", () => {
+    const state = chooseMissingSuit(createNewGame(12), 0, "s");
+    state.currentSeat = 0;
+    state.awaitingDiscard = true;
+    state.players[0].missingSuit = "s";
+    state.players[0].hand = tiles(["s1", "s2", "m5", "m5", "p1", "p2", "p3", "p4", "p5", "p6", "p7", "p8", "p9", "m1"]);
+    state.players[0].drawnTileId = undefined;
+    const nonMissing = state.players[0].hand.find((tile) => tile.code === "m5");
+
+    const next = discardTile(state, 0, nonMissing?.id ?? "");
+
+    expect(next).toBe(state);
+    expect(next.players[0].hand.map((tile) => tile.code)).toContain("m5");
+    expect(next.awaitingDiscard).toBe(true);
+  });
+
+  it("allows a missing-suit discard while the player still holds the missing suit", () => {
+    const state = chooseMissingSuit(createNewGame(12), 0, "s");
+    state.currentSeat = 0;
+    state.awaitingDiscard = true;
+    state.players[0].missingSuit = "s";
+    state.players[0].hand = tiles(["s1", "s2", "m5", "m5", "p1", "p2", "p3", "p4", "p5", "p6", "p7", "p8", "p9", "m1"]);
+    state.players[0].drawnTileId = undefined;
+    const missingTile = state.players[0].hand.find((tile) => tile.code === "s1");
+
+    const next = discardTile(state, 0, missingTile?.id ?? "");
+
+    expect(next).not.toBe(state);
+    expect(next.players[0].discards.map((tile) => tile.code)).toContain("s1");
+    expect(next.players[0].hand.map((tile) => tile.code)).not.toContain("s1");
+  });
+
+  it("allows melds on non-missing tiles while the player still holds the missing suit", () => {
+    const state = chooseMissingSuit(createNewGame(12), 0, "s");
+    state.players[0].missingSuit = "s";
+    state.players[0].hand = tiles(["s1", "m5", "m5", "m5", "p1", "p2", "p3"]);
+    const [m5] = tiles(["m5", "m5", "m5"]).slice(2);
+
+    const options = getMeldOptionsForSeat(state, 0, 1, m5);
+
+    expect(options.find((option) => option.action === "pong")?.handTileIds).toHaveLength(2);
+    expect(options.find((option) => option.action === "kong")?.handTileIds).toHaveLength(3);
+  });
+
   it("offers pong and kong from concrete hand tiles", () => {
     const state = chooseMissingSuit(createNewGame(13), 0, "s");
     state.players[0].missingSuit = "s";
@@ -185,9 +244,159 @@ describe("sichuan engine — flow", () => {
     expect(next.players[0].score).toBe(before[0] + 6);
     expect(next.players[1].score).toBe(before[1] - 2);
   });
+
+  it("allows concealed kong on non-missing tiles while the player still holds the missing suit", () => {
+    const state = chooseMissingSuit(createNewGame(20), 0, "s");
+    state.currentSeat = 0;
+    state.awaitingDiscard = true;
+    state.players[0].missingSuit = "s";
+    state.players[0].hand = tiles(["s1", "m5", "m5", "m5", "m5", "m1", "m2", "m3", "p1", "p2", "p3", "p4", "p6", "p7"]);
+    state.players[0].drawnTileId = undefined;
+
+    const next = declareConcealedKong(state, 0, "m5");
+
+    expect(next).not.toBe(state);
+    expect(next.players[0].melds[0]?.kind).toBe("kong-concealed");
+    expect(next.players[0].hand.map((tile) => tile.code)).toContain("s1");
+    expect(next.awaitingDiscard).toBe(true);
+  });
+
+  it("does not allow concealed kong on missing-suit tiles", () => {
+    const state = chooseMissingSuit(createNewGame(20), 0, "s");
+    state.currentSeat = 0;
+    state.awaitingDiscard = true;
+    state.players[0].missingSuit = "s";
+    state.players[0].hand = tiles(["s1", "s1", "s1", "s1", "m1", "m2", "m3", "p1", "p2", "p3", "p4", "p6", "p7", "p8"]);
+    state.players[0].drawnTileId = undefined;
+
+    const next = declareConcealedKong(state, 0, "s1");
+
+    expect(next).toBe(state);
+    expect(next.players[0].melds).toHaveLength(0);
+  });
 });
 
 describe("sichuan engine — bloody battle", () => {
+  it("offers pong on non-missing tiles even before the missing suit has been cleared", () => {
+    const take = createTilePicker();
+    const state = chooseMissingSuit(createNewGame(21), 0, "s");
+    state.currentSeat = 1;
+    state.awaitingDiscard = true;
+    state.players[0].missingSuit = "s";
+    state.players[0].hand = take(["s1", "m5", "m5", "m1", "m2", "m4", "m8", "m9", "p1", "p3", "p4", "p6", "p8"]);
+    state.players[1].missingSuit = "s";
+    state.players[1].hand = take(["m5", "m3", "m4", "m6", "m7", "p1", "p2", "p3", "p5", "p6", "p7", "p8", "p9", "p4"]);
+    state.players[2].missingSuit = "s";
+    state.players[2].hand = take(["s1", "m1", "m2", "m3", "m4"]);
+    state.players[3].missingSuit = "s";
+    state.players[3].hand = take(["s2", "m6", "m7", "m8", "m9"]);
+    state.players[1].drawnTileId = undefined;
+    const discard = state.players[1].hand.find((tile) => tile.code === "m5");
+
+    const next = discardTile(state, 1, discard?.id ?? "");
+
+    expect(next.pendingClaim?.seat).toBe(0);
+    expect(next.pendingClaim?.options.map((option) => option.action)).toContain("pong");
+  });
+
+  it("forces a missing-suit discard after pong if the player still holds missing tiles", () => {
+    const take = createTilePicker();
+    const state = chooseMissingSuit(createNewGame(21), 0, "s");
+    state.currentSeat = 1;
+    state.awaitingDiscard = true;
+    state.players[0].missingSuit = "s";
+    state.players[0].hand = take(["s1", "m5", "m5", "m1", "m2", "m4", "m8", "m9", "p1", "p3", "p4", "p6", "p8"]);
+    state.players[1].missingSuit = "s";
+    state.players[1].hand = take(["m5", "m3", "m4", "m6", "m7", "p1", "p2", "p3", "p5", "p6", "p7", "p8", "p9", "p4"]);
+    state.players[2].missingSuit = "s";
+    state.players[2].hand = take(["s1", "m1", "m2", "m3", "m4"]);
+    state.players[3].missingSuit = "s";
+    state.players[3].hand = take(["s2", "m6", "m7", "m8", "m9"]);
+    state.players[1].drawnTileId = undefined;
+    const discard = state.players[1].hand.find((tile) => tile.code === "m5");
+    const pending = discardTile(state, 1, discard?.id ?? "");
+    const pong = pending.pendingClaim?.options.find((option) => option.action === "pong");
+    const afterPong = claimMeld(pending, 0, pong?.id ?? "");
+    const nonMissing = afterPong.players[0].hand.find((tile) => tile.suit !== "s");
+
+    const blocked = discardTile(afterPong, 0, nonMissing?.id ?? "");
+
+    expect(blocked).toBe(afterPong);
+    expect(blocked.players[0].hand.map((tile) => tile.code)).toContain("s1");
+  });
+
+  it("offers pong after the missing suit has been cleared", () => {
+    const take = createTilePicker();
+    const state = chooseMissingSuit(createNewGame(22), 0, "s");
+    state.currentSeat = 1;
+    state.awaitingDiscard = true;
+    state.players[0].missingSuit = "s";
+    state.players[0].hand = take(["m5", "m5", "m1", "m2", "m4", "m8", "m9", "p1", "p3", "p4", "p6", "p8", "p9"]);
+    state.players[1].missingSuit = "s";
+    state.players[1].hand = take(["m5", "m3", "m4", "m6", "m7", "p1", "p2", "p3", "p5", "p6", "p7", "p8", "p9", "p4"]);
+    state.players[2].missingSuit = "s";
+    state.players[2].hand = take(["s1", "m1", "m2", "m3", "m4"]);
+    state.players[3].missingSuit = "s";
+    state.players[3].hand = take(["s2", "m6", "m7", "m8", "m9"]);
+    state.players[1].drawnTileId = undefined;
+    const discard = state.players[1].hand.find((tile) => tile.code === "m5");
+
+    const next = discardTile(state, 1, discard?.id ?? "");
+
+    expect(next.pendingClaim?.seat).toBe(0);
+    expect(next.pendingClaim?.options.map((option) => option.action)).toContain("pong");
+  });
+
+  it("applies a human pong after the missing suit has been cleared", () => {
+    const take = createTilePicker();
+    const state = chooseMissingSuit(createNewGame(23), 0, "s");
+    state.currentSeat = 1;
+    state.awaitingDiscard = true;
+    state.players[0].missingSuit = "s";
+    state.players[0].hand = take(["m5", "m5", "m1", "m2", "m4", "m8", "m9", "p1", "p3", "p4", "p6", "p8", "p9"]);
+    state.players[1].missingSuit = "s";
+    state.players[1].hand = take(["m5", "m3", "m4", "m6", "m7", "p1", "p2", "p3", "p5", "p6", "p7", "p8", "p9", "p4"]);
+    state.players[2].missingSuit = "s";
+    state.players[2].hand = take(["s1", "m1", "m2", "m3", "m4"]);
+    state.players[3].missingSuit = "s";
+    state.players[3].hand = take(["s2", "m6", "m7", "m8", "m9"]);
+    state.players[1].drawnTileId = undefined;
+    const discard = state.players[1].hand.find((tile) => tile.code === "m5");
+    const pending = discardTile(state, 1, discard?.id ?? "");
+    const pong = pending.pendingClaim?.options.find((option) => option.action === "pong");
+
+    const next = claimMeld(pending, 0, pong?.id ?? "");
+
+    expect(next.currentSeat).toBe(0);
+    expect(next.awaitingDiscard).toBe(true);
+    expect(next.players[0].melds[0]?.kind).toBe("pong");
+    expect(next.players[0].melds[0]?.code).toBe("m5");
+    expect(next.players[1].discards.some((tile) => tile.code === "m5")).toBe(false);
+  });
+
+  it("lets a bot win before the human can pong the same discard", () => {
+    const take = createTilePicker();
+    const state = chooseMissingSuit(createNewGame(24), 0, "s");
+    state.currentSeat = 3;
+    state.awaitingDiscard = true;
+    state.players[0].missingSuit = "s";
+    state.players[0].hand = take(["p5", "p5", "m1", "m2", "m4", "p1", "p3", "p4", "p6", "p7", "p8", "p9", "m9"]);
+    state.players[1].missingSuit = "s";
+    state.players[1].hand = take(["m1", "m2", "m3", "p2", "p3", "p4", "m7", "m8", "m9", "p6", "p7", "p8", "p5"]);
+    state.players[2].missingSuit = "s";
+    state.players[2].hand = take(["s1", "m1", "m2", "m3", "m4"]);
+    state.players[3].missingSuit = "s";
+    state.players[3].hand = take(["p5", "m4", "m5", "m6", "m7", "m8", "m9", "p1", "p1", "p2", "p3", "p4", "p6", "p7"]);
+    state.players[3].drawnTileId = undefined;
+    const discard = state.players[3].hand.find((tile) => tile.code === "p5");
+
+    const next = discardTile(state, 3, discard?.id ?? "");
+
+    expect(next.pendingClaim).toBeUndefined();
+    expect(next.players[1].hasWon).toBe(true);
+    expect(next.players[0].melds).toHaveLength(0);
+  });
+
   it("keeps playing after one bot wins (does not finish immediately)", () => {
     const state = chooseMissingSuit(createNewGame(21), 0, "s");
     // Seat 3 discards a tile seat 1 can win on; two other seats still active -> keep playing.
