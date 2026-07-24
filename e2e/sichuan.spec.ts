@@ -166,7 +166,7 @@ test("home page lets you pick a mode and routes by path", async ({ page }) => {
   await expect(page.getByRole("button", { name: "选择巷口麻将" })).toBeVisible();
   await expect(page.getByRole("button", { name: /川麻/ })).toBeVisible();
   await expect(page.getByRole("button", { name: "开始麻将连连看" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "麻将羊羊消敬请期待" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "开始麻将羊羊消" })).toBeVisible();
 
   await page.getByRole("button", { name: "选择巷口麻将" }).click();
   await expect(page).toHaveURL(/\/game\/xiangkou$/);
@@ -189,7 +189,9 @@ test("home page lets you pick a mode and routes by path", async ({ page }) => {
   await expect(page.getByLabel("麻将连连看")).toBeVisible();
 
   await page.goto("/");
-  await expect(page.getByRole("button", { name: "麻将羊羊消敬请期待" })).toBeDisabled();
+  await page.getByRole("button", { name: "开始麻将羊羊消" }).click();
+  await expect(page).toHaveURL(/\/play\/yangyang$/);
+  await expect(page.getByLabel("麻将羊羊消")).toBeVisible();
 });
 
 test("home and mode selection fit short mobile landscape browser viewports", async ({ page, browserName }) => {
@@ -314,7 +316,7 @@ test("casual games enter and support first interactions", async ({ page }) => {
 
   await page.goto("/play/yangyang?seed=23");
   await expect(page.getByLabel("麻将羊羊消")).toBeVisible();
-  await expect(page.getByTestId("yang-tile")).toHaveCount(45);
+  await expect(page.getByTestId("yang-tile")).toHaveCount(54);
   const blockedTiles = page.locator('[data-testid="yang-tile"][data-blocked="true"]');
   await expect(blockedTiles.first()).toBeDisabled();
 

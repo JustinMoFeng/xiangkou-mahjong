@@ -284,14 +284,14 @@ describe("mahjong yangyang rules", () => {
     expect(after.slots).toHaveLength(0);
   });
 
-  it("creates a fixed first level with fifteen triples", () => {
+  it("creates a fixed first level with eighteen triples", () => {
     const state = createYangGame(7, 0);
     const counts = new Map<CasualTileCode, number>();
     for (const tile of state.tiles) {
       counts.set(tile.code, (counts.get(tile.code) ?? 0) + 1);
     }
 
-    expect(state.tiles).toHaveLength(45);
-    expect([...counts.values()].sort()).toEqual(Array.from({ length: 15 }, () => 3));
+    expect(state.tiles).toHaveLength(54);
+    expect([...counts.values()].sort()).toEqual(Array.from({ length: 18 }, () => 3));
   });
 });

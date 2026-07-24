@@ -13,19 +13,19 @@
   display: grid;
   place-items: center;
   min-height: 0;
-  padding: clamp(4px, 1vw, 10px);
+  padding: clamp(4px, 0.8vw, 8px);
 }
 
 .yang-stack {
-  --yang-tile-w: clamp(44px, 6vw, 70px);
-  --yang-tile-h: calc(var(--yang-tile-w) * 1.42);
-  --yang-step-x: calc(var(--yang-tile-w) * 0.78);
-  --yang-step-y: calc(var(--yang-tile-h) * 0.54);
+  --yang-tile-w: 56px;
+  --yang-tile-h: 76px;
+  --yang-step-x: calc(var(--yang-tile-w) + 6px);
+  --yang-step-y: calc(var(--yang-tile-h) + 6px);
+  --yang-layer-x: 3px;
+  --yang-layer-y: -4px;
   position: relative;
-  width: min(100%, calc(var(--yang-step-x) * 7.6 + var(--yang-tile-w)));
-  height: min(100%, calc(var(--yang-step-y) * 5 + var(--yang-tile-h) + 18px));
-  min-height: 0;
-  aspect-ratio: 2.05 / 1;
+  width: min(100%, calc(var(--yang-step-x) * 8.4 + var(--yang-tile-w)));
+  height: min(100%, calc(var(--yang-step-y) * 5.2 + var(--yang-tile-h) + 16px));
   border: 1px solid rgba(255, 247, 227, 0.15);
   border-radius: 8px;
   background:
@@ -47,19 +47,18 @@
 
 .yang-tile {
   position: absolute;
-  left: calc(50% - (var(--yang-step-x) * 3.65) + var(--yang-x) * var(--yang-step-x));
-  top: calc(50% - (var(--yang-step-y) * 2.9) + var(--yang-y) * var(--yang-step-y));
-  z-index: calc(2 + var(--yang-layer));
+  left: calc(50% - (var(--yang-step-x) * 3.35) + var(--yang-x) * var(--yang-step-x) + var(--yang-layer) * var(--yang-layer-x));
+  top: calc(50% - (var(--yang-step-y) * 2.65) + var(--yang-y) * var(--yang-step-y) + var(--yang-layer) * var(--yang-layer-y));
+  z-index: calc(10 + var(--yang-layer));
   display: grid;
   place-items: center;
   width: var(--yang-tile-w);
   height: var(--yang-tile-h);
   padding: 0;
-  border: 1px solid rgba(255, 247, 227, 0.16);
+  border: 0;
   border-radius: 8px;
-  background: rgba(255, 247, 227, 0.07);
+  background: transparent;
   cursor: pointer;
-  transform: translateY(calc(var(--yang-layer) * -4px));
   transition:
     transform 150ms ease,
     filter 150ms ease,
@@ -69,18 +68,18 @@
 
 .yang-tile img {
   display: block;
-  width: 86%;
-  height: 92%;
+  width: 100%;
+  height: 100%;
   object-fit: contain;
   filter:
-    drop-shadow(0 8px 7px rgba(0, 0, 0, 0.28))
+    drop-shadow(0 9px 8px rgba(0, 0, 0, 0.34))
     drop-shadow(0 1px 0 rgba(255, 255, 255, 0.18));
   user-select: none;
 }
 
 .yang-tile.is-clickable:hover,
 .yang-tile.is-hinted {
-  transform: translateY(calc(var(--yang-layer) * -4px - 6px));
+  transform: translateY(-6px);
   border-color: rgba(255, 216, 137, 0.86);
   filter: drop-shadow(0 14px 15px rgba(0, 0, 0, 0.3));
 }
@@ -91,19 +90,19 @@
 
 .yang-tile.is-blocked {
   cursor: not-allowed;
-  opacity: 0.54;
-  filter: saturate(0.72) brightness(0.82);
+  opacity: 1;
+  filter: brightness(0.48) saturate(0.72) contrast(0.9);
 }
 
 .yang-tile.is-removed {
   pointer-events: none;
   opacity: 0;
-  transform: translateY(calc(var(--yang-layer) * -4px + 8px)) scale(0.78);
+  transform: translateY(8px) scale(0.78);
 }
 
 .yang-slotbar {
   display: grid;
-  grid-template-columns: repeat(7, minmax(34px, 58px));
+  grid-template-columns: repeat(7, var(--yang-slot-w, 52px));
   justify-content: center;
   gap: clamp(5px, 1vw, 9px);
   padding: clamp(6px, 1vw, 10px);
@@ -117,8 +116,8 @@
 .yang-slot {
   display: grid;
   place-items: center;
-  aspect-ratio: 0.72 / 1;
-  min-height: 0;
+  width: var(--yang-slot-w, 52px);
+  height: var(--yang-slot-h, 70px);
   border: 1px dashed rgba(255, 247, 227, 0.2);
   border-radius: 8px;
   background: rgba(255, 247, 227, 0.05);
@@ -132,8 +131,8 @@
 
 .yang-slot img {
   display: block;
-  width: 88%;
-  height: 92%;
+  width: 100%;
+  height: 100%;
   object-fit: contain;
   filter: drop-shadow(0 7px 7px rgba(0, 0, 0, 0.24));
 }
@@ -144,13 +143,20 @@
   }
 
   .yang-stack {
-    --yang-tile-w: clamp(33px, 5.2vw, 46px);
-    width: min(100%, calc((100dvh - 92px) * 2.45));
-    height: min(100%, calc(100dvh - 92px));
+    --yang-tile-w: 42px;
+    --yang-tile-h: 56px;
+    --yang-step-x: calc(var(--yang-tile-w) + 4px);
+    --yang-step-y: calc(var(--yang-tile-h) + 4px);
+    --yang-layer-x: 2px;
+    --yang-layer-y: -3px;
+    width: min(100%, calc(var(--yang-step-x) * 8.4 + var(--yang-tile-w)));
+    height: min(100%, calc(var(--yang-step-y) * 5.2 + var(--yang-tile-h) + 12px));
   }
 
   .yang-slotbar {
-    grid-template-columns: repeat(7, minmax(25px, 40px));
+    --yang-slot-w: 36px;
+    --yang-slot-h: 49px;
+    grid-template-columns: repeat(7, var(--yang-slot-w));
     gap: 4px;
     padding: 4px 6px;
   }
@@ -158,13 +164,18 @@
 
 @media (orientation: landscape) and (max-height: 300px) {
   .yang-stack {
-    --yang-tile-w: clamp(27px, 4.8vw, 36px);
-    width: min(100%, calc((100dvh - 70px) * 2.5));
-    height: min(100%, calc(100dvh - 70px));
+    --yang-tile-w: 34px;
+    --yang-tile-h: 46px;
+    --yang-step-x: calc(var(--yang-tile-w) + 3px);
+    --yang-step-y: calc(var(--yang-tile-h) + 3px);
+    --yang-layer-x: 2px;
+    --yang-layer-y: -2px;
   }
 
   .yang-slotbar {
-    grid-template-columns: repeat(7, minmax(22px, 32px));
+    --yang-slot-w: 30px;
+    --yang-slot-h: 41px;
+    grid-template-columns: repeat(7, var(--yang-slot-w));
     padding: 3px 5px;
   }
 }
