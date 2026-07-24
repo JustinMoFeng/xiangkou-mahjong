@@ -187,6 +187,74 @@ test("all supported landscape sizes keep seats, rivers, commands and hand separa
   }
 });
 
+test("xiangkou short mobile landscape keeps the hand playable under browser chrome", async ({ page, browserName }) => {
+  test.skip(browserName !== "chromium", "short mobile viewport matrix only needs one Chromium project");
+
+  for (const viewport of [
+    { width: 740, height: 320 },
+    { width: 802, height: 293 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await gotoScenario(page, "multi-chow");
+
+    await expect(page.getByLabel("巷口麻将牌桌")).toBeVisible();
+    await expect(page.getByTestId("claim-option-chow")).toHaveCount(3);
+
+    const layout = await page.evaluate(() => {
+      const rect = (selector: string) => {
+        const element = document.querySelector(selector);
+        if (!element) throw new Error(`Missing ${selector}`);
+        const bounds = element.getBoundingClientRect();
+        return {
+          left: bounds.left,
+          top: bounds.top,
+          right: bounds.right,
+          bottom: bounds.bottom,
+          width: bounds.width,
+          height: bounds.height,
+        };
+      };
+      const overlapArea = (first: ReturnType<typeof rect>, second: ReturnType<typeof rect>) =>
+        Math.max(0, Math.min(first.right, second.right) - Math.max(first.left, second.left)) *
+        Math.max(0, Math.min(first.bottom, second.bottom) - Math.max(first.top, second.top));
+      const insideViewport = (bounds: ReturnType<typeof rect>) =>
+        bounds.left >= -1 &&
+        bounds.top >= -1 &&
+        bounds.right <= window.innerWidth + 1 &&
+        bounds.bottom <= window.innerHeight + 1;
+
+      const hand = rect(".hand-row");
+      const command = rect(".command-bar");
+      const topBar = rect(".top-bar");
+      const table = rect(".mahjong-table");
+      const firstTile = rect(".hand-row .tile-button");
+
+      return {
+        noOverflow:
+          document.documentElement.scrollWidth <= window.innerWidth + 1 &&
+          document.documentElement.scrollHeight <= window.innerHeight + 1,
+        tableInside: insideViewport(table),
+        topInside: insideViewport(topBar),
+        handInside: insideViewport(hand),
+        commandInside: insideViewport(command),
+        commandClearOfHand: overlapArea(command, hand) === 0,
+        tileHeight: firstTile.height,
+      };
+    });
+
+    expect(layout, `${viewport.width}x${viewport.height}`).toEqual({
+      noOverflow: true,
+      tableInside: true,
+      topInside: true,
+      handInside: true,
+      commandInside: true,
+      commandClearOfHand: true,
+      tileHeight: expect.any(Number),
+    });
+    expect(layout.tileHeight, `${viewport.width}x${viewport.height}`).toBeGreaterThanOrEqual(41);
+  }
+});
+
 test("mobile portrait shows rotate prompt instead of squeezed table", async ({ page, browserName }) => {
   test.skip(browserName !== "chromium", "portrait prompt is checked with Chromium viewport override");
   await page.setViewportSize({ width: 390, height: 844 });

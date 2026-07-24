@@ -48,6 +48,7 @@ export default function SichuanApp({ onBackHome }: { onBackHome?: () => void }) 
   const addedKongs = canHumanAddedKong(state);
   const kongCodes = [...concealedKongs, ...addedKongs];
   const isChoosingMissing = state.phase === "choosing-missing";
+  const humanMustDiscardMissing = hasMissingSuitTiles(human);
 
   useEffect(() => {
     saveGame(state);
@@ -62,7 +63,17 @@ export default function SichuanApp({ onBackHome }: { onBackHome?: () => void }) 
       setState((current) => playBotTurnStep(current));
     }, delay);
     return () => window.clearTimeout(timer);
-  }, [currentPlayer.type, currentPlayer.hasWon, isPaused, state.awaitingDiscard, state.pendingClaim, state.phase, state.turn]);
+  }, [
+    currentPlayer.type,
+    currentPlayer.hasWon,
+    isPaused,
+    state.awaitingDiscard,
+    state.currentSeat,
+    state.drawReplacement,
+    state.pendingClaim,
+    state.phase,
+    state.turn,
+  ]);
 
   useEffect(() => {
     if (
@@ -183,10 +194,11 @@ export default function SichuanApp({ onBackHome }: { onBackHome?: () => void }) 
                     state.currentSeat !== 0 ||
                     Boolean(state.pendingClaim) ||
                     !state.awaitingDiscard ||
-                    human.hasWon
+                    human.hasWon ||
+                    (humanMustDiscardMissing && tile.suit !== human.missingSuit)
                   }
                   onClick={() => onDiscard(tile)}
-                  title={`打出${tile.label}`}
+                  title={humanMustDiscardMissing && tile.suit !== human.missingSuit ? "先打完定缺花色" : `打出${tile.label}`}
                   data-testid={human.drawnTileId === tile.id ? "sc-drawn-tile" : "sc-hand-tile"}
                 >
                   <TileFace tile={tile} highlighted={highlightedTileIds.includes(tile.id)} />
@@ -389,6 +401,10 @@ function PlayerStatus({ player, active }: { player: Player; active: boolean }) {
       </small>
     </div>
   );
+}
+
+function hasMissingSuitTiles(player: Player): boolean {
+  return Boolean(player.missingSuit && player.hand.some((tile) => tile.suit === player.missingSuit));
 }
 
 function MeldRow({ melds, compact = false }: { melds: Meld[]; compact?: boolean }) {
