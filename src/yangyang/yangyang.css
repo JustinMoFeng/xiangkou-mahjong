@@ -9,28 +9,181 @@
   width: min(1180px, 100%);
 }
 
+.yang-level-select {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: clamp(8px, 1.2vw, 12px);
+  width: min(1120px, 100%);
+  height: calc(100dvh - clamp(12px, 2.4vw, 28px));
+  min-height: 520px;
+  margin: 0 auto;
+  padding: clamp(9px, 1.4vw, 16px);
+  overflow: hidden;
+  border: 1px solid rgba(215, 163, 72, 0.34);
+  border-radius: 8px;
+  background:
+    repeating-linear-gradient(35deg, rgba(255, 247, 227, 0.018) 0 1px, transparent 1px 6px),
+    radial-gradient(circle at 46% 48%, rgba(20, 98, 70, 0.88), rgba(7, 34, 26, 0.98) 72%);
+  box-shadow:
+    0 28px 80px rgba(0, 0, 0, 0.38),
+    inset 0 0 0 5px rgba(4, 31, 22, 0.26);
+}
+
+.yang-level-select__top {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  align-items: center;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 247, 227, 0.13);
+}
+
+.yang-level-select__top p {
+  margin: 0 0 2px;
+  color: rgba(246, 239, 225, 0.64);
+  font-size: 0.74rem;
+}
+
+.yang-level-select__top h1 {
+  margin: 0;
+  color: #fff4da;
+  font-size: clamp(1.24rem, 2.8vw, 1.9rem);
+  line-height: 1.05;
+}
+
+.yang-level-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  align-content: start;
+  min-height: 0;
+  overflow: auto;
+  padding: 1px 4px 8px 1px;
+  scrollbar-color: rgba(215, 163, 72, 0.42) transparent;
+}
+
+.yang-level-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  grid-template-rows: auto auto auto 1fr auto;
+  gap: 4px 8px;
+  min-height: 122px;
+  padding: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 247, 227, 0.16);
+  border-radius: 8px;
+  color: #fff4da;
+  background:
+    linear-gradient(130deg, rgba(255, 247, 227, 0.08), rgba(255, 247, 227, 0.02)),
+    rgba(5, 23, 17, 0.62);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    transform 150ms ease,
+    border-color 150ms ease,
+    background-color 150ms ease;
+}
+
+.yang-level-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 216, 137, 0.5);
+  background:
+    linear-gradient(130deg, rgba(255, 216, 137, 0.12), rgba(255, 247, 227, 0.03)),
+    rgba(7, 33, 24, 0.72);
+}
+
+.yang-level-card__difficulty {
+  grid-column: 1;
+  width: fit-content;
+  padding: 2px 7px;
+  border: 1px solid rgba(255, 247, 227, 0.2);
+  border-radius: 999px;
+  color: rgba(255, 247, 227, 0.8);
+  background: rgba(255, 247, 227, 0.06);
+  font-size: 0.66rem;
+}
+
+.yang-level-card__difficulty--简单 {
+  color: #dbf6cf;
+  border-color: rgba(147, 213, 121, 0.42);
+}
+
+.yang-level-card__difficulty--中等 {
+  color: #ffe0a3;
+  border-color: rgba(255, 195, 105, 0.44);
+}
+
+.yang-level-card__difficulty--困难,
+.yang-level-card__difficulty--无尽,
+.yang-level-card__difficulty--噩梦,
+.yang-level-card__difficulty--地狱 {
+  color: #ffc6a8;
+  border-color: rgba(227, 91, 67, 0.46);
+}
+
+.yang-level-card strong {
+  grid-column: 1;
+  font-size: 1.02rem;
+  letter-spacing: 0;
+}
+
+.yang-level-card small {
+  grid-column: 1 / span 2;
+  color: rgba(246, 239, 225, 0.68);
+  font-size: 0.72rem;
+}
+
+.yang-level-card p {
+  grid-column: 1 / -1;
+  margin: 2px 0 0;
+  color: rgba(246, 239, 225, 0.76);
+  font-size: 0.78rem;
+  line-height: 1.38;
+}
+
+.yang-level-card__best {
+  grid-column: 1 / span 2;
+  align-self: end;
+  color: #ffd889;
+  font-size: 0.74rem;
+}
+
+.yang-level-card svg {
+  color: rgba(255, 216, 137, 0.74);
+}
+
+.yang-level-card svg:first-of-type {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+}
+
+.yang-level-card svg:last-of-type {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+}
+
 .yang-playfield {
   display: grid;
   place-items: center;
   min-height: 0;
-  padding: clamp(4px, 0.8vw, 8px);
+  padding: clamp(2px, 0.6vw, 7px);
 }
 
 .yang-stack {
-  --yang-tile-w: 56px;
-  --yang-tile-h: 76px;
-  --yang-step-x: calc(var(--yang-tile-w) + 6px);
-  --yang-step-y: calc(var(--yang-tile-h) + 6px);
-  --yang-layer-x: 3px;
-  --yang-layer-y: -4px;
+  --yang-tile-w: 68px;
+  --yang-tile-h: 90px;
+  --yang-layer-x: 1px;
+  --yang-layer-y: -1px;
   position: relative;
-  width: min(100%, calc(var(--yang-step-x) * 8.4 + var(--yang-tile-w)));
-  height: min(100%, calc(var(--yang-step-y) * 5.2 + var(--yang-tile-h) + 16px));
+  width: 100%;
+  height: 100%;
+  min-height: 0;
   border: 1px solid rgba(255, 247, 227, 0.15);
   border-radius: 8px;
   background:
-    linear-gradient(90deg, rgba(255, 247, 227, 0.03), transparent 24%, rgba(255, 247, 227, 0.03) 52%, transparent),
-    radial-gradient(ellipse at center, rgba(25, 98, 70, 0.74), rgba(5, 26, 20, 0.64) 68%);
+    linear-gradient(90deg, rgba(255, 247, 227, 0.025), transparent 28%, rgba(255, 247, 227, 0.025) 72%, transparent),
+    radial-gradient(ellipse at 50% 40%, rgba(25, 98, 70, 0.82), rgba(5, 26, 20, 0.68) 74%);
   box-shadow:
     inset 0 0 0 5px rgba(0, 0, 0, 0.13),
     0 18px 42px rgba(0, 0, 0, 0.24);
@@ -45,15 +198,40 @@
   pointer-events: none;
 }
 
+.yang-pile {
+  position: absolute;
+}
+
+.yang-pile--main {
+  top: 3%;
+  right: 13%;
+  bottom: 29%;
+  left: 13%;
+  overflow: hidden;
+  container-type: size;
+}
+
+.yang-pile--support {
+  bottom: 3%;
+  width: 24%;
+  height: var(--yang-tile-h);
+}
+
+.yang-pile--support-left {
+  left: 4%;
+}
+
+.yang-pile--support-right {
+  right: 4%;
+}
+
 .yang-tile {
   position: absolute;
-  left: calc(50% - (var(--yang-step-x) * 3.35) + var(--yang-x) * var(--yang-step-x) + var(--yang-layer) * var(--yang-layer-x));
-  top: calc(50% - (var(--yang-step-y) * 2.65) + var(--yang-y) * var(--yang-step-y) + var(--yang-layer) * var(--yang-layer-y));
   z-index: calc(10 + var(--yang-layer));
   display: grid;
   place-items: center;
-  width: var(--yang-tile-w);
-  height: var(--yang-tile-h);
+  width: var(--yang-active-tile-w, var(--yang-tile-w));
+  height: var(--yang-active-tile-h, var(--yang-tile-h));
   padding: 0;
   border: 0;
   border-radius: 8px;
@@ -64,6 +242,34 @@
     filter 150ms ease,
     opacity 180ms ease,
     border-color 150ms ease;
+}
+
+.yang-pile--main .yang-tile {
+  --yang-active-tile-w: min(
+    var(--yang-tile-w),
+    calc(100cqw / var(--yang-columns)),
+    calc((100cqh / var(--yang-rows)) * 0.7556)
+  );
+  --yang-active-tile-h: calc(var(--yang-active-tile-w) * 1.3235);
+  left: calc(
+    50% -
+    ((var(--yang-columns) * var(--yang-active-tile-w)) / 2) +
+    ((var(--yang-x) / 6) * var(--yang-active-tile-w))
+  );
+  top: calc(
+    50% -
+    ((var(--yang-rows) * var(--yang-active-tile-h)) / 2) +
+    ((var(--yang-y) / 6) * var(--yang-active-tile-h))
+  );
+}
+
+.yang-pile--support .yang-tile {
+  top: calc(50% - (var(--yang-tile-h) / 2) + (var(--yang-layer) * -0.35px));
+  left: calc(var(--yang-left) - (var(--yang-tile-w) / 2) + (var(--yang-layer) * 0.5px));
+}
+
+.yang-pile--support-right .yang-tile {
+  left: calc(100% - var(--yang-left) - (var(--yang-tile-w) / 2) - (var(--yang-layer) * 0.5px));
 }
 
 .yang-tile img {
@@ -138,6 +344,54 @@
 }
 
 @media (orientation: landscape) and (max-height: 430px) {
+  .yang-level-select {
+    height: calc(100dvh - 8px);
+    min-height: 0;
+    padding: 7px 9px;
+    gap: 6px;
+  }
+
+  .yang-level-select__top {
+    padding-bottom: 5px;
+  }
+
+  .yang-level-select__top p {
+    display: none;
+  }
+
+  .yang-level-select__top h1 {
+    font-size: clamp(1rem, 2.8vw, 1.28rem);
+  }
+
+  .yang-level-grid {
+    gap: 7px;
+    padding-bottom: 6px;
+  }
+
+  .yang-level-card {
+    min-height: 78px;
+    padding: 6px 7px;
+  }
+
+  .yang-level-card strong {
+    font-size: 0.9rem;
+  }
+
+  .yang-level-card small,
+  .yang-level-card__best,
+  .yang-level-card__difficulty {
+    font-size: 0.58rem;
+  }
+
+  .yang-level-card p {
+    display: -webkit-box;
+    overflow: hidden;
+    font-size: 0.6rem;
+    line-height: 1.25;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 1;
+  }
+
   .yang-playfield {
     padding: 1px 4px;
   }
@@ -145,36 +399,56 @@
   .yang-stack {
     --yang-tile-w: 42px;
     --yang-tile-h: 56px;
-    --yang-step-x: calc(var(--yang-tile-w) + 4px);
-    --yang-step-y: calc(var(--yang-tile-h) + 4px);
-    --yang-layer-x: 2px;
-    --yang-layer-y: -3px;
-    width: min(100%, calc(var(--yang-step-x) * 8.4 + var(--yang-tile-w)));
-    height: min(100%, calc(var(--yang-step-y) * 5.2 + var(--yang-tile-h) + 12px));
+    --yang-layer-x: 0.6px;
+    --yang-layer-y: -0.6px;
+  }
+
+  .yang-pile--main {
+    top: 2%;
+    right: 14%;
+    bottom: 31%;
+    left: 14%;
+  }
+
+  .yang-pile--support {
+    bottom: 2%;
+    width: 27%;
   }
 
   .yang-slotbar {
-    --yang-slot-w: 36px;
-    --yang-slot-h: 49px;
+    --yang-slot-w: 27px;
+    --yang-slot-h: 37px;
     grid-template-columns: repeat(7, var(--yang-slot-w));
     gap: 4px;
-    padding: 4px 6px;
+    padding: 3px 6px;
   }
 }
 
 @media (orientation: landscape) and (max-height: 300px) {
+  .yang-level-select {
+    padding: 5px 7px;
+    gap: 4px;
+  }
+
+  .yang-level-card {
+    min-height: 66px;
+    padding: 5px 6px;
+  }
+
+  .yang-level-card p {
+    -webkit-line-clamp: 1;
+  }
+
   .yang-stack {
     --yang-tile-w: 34px;
     --yang-tile-h: 46px;
-    --yang-step-x: calc(var(--yang-tile-w) + 3px);
-    --yang-step-y: calc(var(--yang-tile-h) + 3px);
-    --yang-layer-x: 2px;
-    --yang-layer-y: -2px;
+    --yang-layer-x: 0.45px;
+    --yang-layer-y: -0.45px;
   }
 
   .yang-slotbar {
-    --yang-slot-w: 30px;
-    --yang-slot-h: 41px;
+    --yang-slot-w: 24px;
+    --yang-slot-h: 33px;
     grid-template-columns: repeat(7, var(--yang-slot-w));
     padding: 3px 5px;
   }

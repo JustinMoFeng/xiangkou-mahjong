@@ -55,6 +55,12 @@ export default function SichuanApp({ onBackHome }: { onBackHome?: () => void }) 
   }, [state]);
 
   useEffect(() => {
+    const saveBeforeUnload = () => saveGame(state);
+    window.addEventListener("pagehide", saveBeforeUnload);
+    return () => window.removeEventListener("pagehide", saveBeforeUnload);
+  }, [state]);
+
+  useEffect(() => {
     if (isPaused || state.phase !== "playing" || state.pendingClaim || currentPlayer.type !== "bot" || currentPlayer.hasWon) {
       return;
     }
