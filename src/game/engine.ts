@@ -9,6 +9,7 @@ import type {
   Player,
   PlayerNames,
   Seat,
+  SeatType,
   Tile,
   TileCode,
   WinKind,
@@ -28,9 +29,15 @@ export function normalizePlayerNames(names?: readonly string[]): PlayerNames {
   }) as PlayerNames;
 }
 
-export function createNewGame(seed = Date.now(), carriedScores?: number[], roundNumber = 1, names?: readonly string[]): GameState {
+export function createNewGame(
+  seed = Date.now(),
+  carriedScores?: number[],
+  roundNumber = 1,
+  names?: readonly string[],
+  seatTypes?: Partial<Record<Seat, SeatType>>,
+): GameState {
   const wall = shuffleTiles(createWall(), seed);
-  const players = createPlayers(normalizePlayerNames(names));
+  const players = createPlayers(normalizePlayerNames(names), seatTypes);
 
   if (carriedScores) {
     for (const player of players) {
@@ -78,6 +85,7 @@ export function createNextRound(state: GameState, seed = Date.now()): GameState 
     state.players.map((player) => player.score),
     state.roundNumber + 1,
     state.players.map((player) => player.name),
+    Object.fromEntries(state.players.map((player) => [player.seat, player.type])) as Partial<Record<Seat, SeatType>>,
   );
 }
 
@@ -419,20 +427,24 @@ export function playBotTurnStep(state: GameState): GameState {
 }
 
 export function canCurrentHumanSelfWin(state: GameState): boolean {
-  if (state.phase !== "playing" || state.pendingClaim || state.currentSeat !== HUMAN_SEAT) {
+  return canSeatSelfWin(state, HUMAN_SEAT);
+}
+
+export function canSeatSelfWin(state: GameState, seat: Seat): boolean {
+  if (state.phase !== "playing" || state.pendingClaim || state.currentSeat !== seat) {
     return false;
   }
 
-  const player = state.players[HUMAN_SEAT];
+  const player = state.players[seat];
   return player.hand.length % 3 === 2 && checkStandardWin(player.hand).canWin;
 }
 
-export function claimSelfDraw(state: GameState): GameState {
-  if (!canCurrentHumanSelfWin(state)) {
+export function claimSelfDraw(state: GameState, seat: Seat = HUMAN_SEAT): GameState {
+  if (!canSeatSelfWin(state, seat)) {
     return state;
   }
 
-  const player = state.players[HUMAN_SEAT];
+  const player = state.players[seat];
   const check = checkStandardWin(player.hand);
 
   if (!check.canWin || !check.pattern) {
@@ -440,8 +452,8 @@ export function claimSelfDraw(state: GameState): GameState {
   }
 
   return finishWin(state, {
-    winner: HUMAN_SEAT,
-    from: HUMAN_SEAT,
+    winner: seat,
+    from: seat,
     tile: player.hand[player.hand.length - 1],
     kind: "self-draw",
     pattern: check.pattern,
@@ -451,18 +463,21 @@ export function claimSelfDraw(state: GameState): GameState {
 function resolveDiscard(state: GameState, from: Seat, tile: Tile): GameState {
   const seats = orderedSeatsAfter(from);
   const winSeats = seats.filter((seat) => checkStandardWin([...state.players[seat].hand, tile]).canWin);
-  const humanWin = winSeats.includes(HUMAN_SEAT);
+  const interactiveWinner = winSeats.find((seat) => state.players[seat].type !== "bot");
 
-  if (humanWin) {
+  if (interactiveWinner !== undefined) {
     const next = cloneGameState(state);
     next.pendingClaim = {
       id: createId("claim"),
       from,
       tile,
-      seat: HUMAN_SEAT,
-      options: getClaimOptionsForSeat(state, HUMAN_SEAT, from, tile).filter((option) => option.action === "win"),
+      seat: interactiveWinner,
+      options: getClaimOptionsForSeat(state, interactiveWinner, from, tile).filter((option) => option.action === "win"),
     };
-    next.recentAction = `你可以操作 ${state.players[from].name} 打出的 ${tile.label}`;
+    next.recentAction =
+      interactiveWinner === HUMAN_SEAT
+        ? `你可以操作 ${state.players[from].name} 打出的 ${tile.label}`
+        : `${state.players[interactiveWinner].name}可以操作 ${state.players[from].name} 打出的 ${tile.label}`;
     next.logs = addLog(next.logs, next.recentAction);
     return next;
   }
@@ -482,20 +497,29 @@ function resolveDiscard(state: GameState, from: Seat, tile: Tile): GameState {
     }
   }
 
-  const humanMeldOptions = getClaimOptionsForSeat(state, HUMAN_SEAT, from, tile).filter(
-    (option) => option.action === "pong" || option.action === "kong",
-  );
+  const interactiveMeld = seats
+    .filter((seat) => state.players[seat].type !== "bot")
+    .map((seat) => {
+      const options = getClaimOptionsForSeat(state, seat, from, tile).filter(
+        (option) => option.action === "pong" || option.action === "kong",
+      );
+      return options.length > 0 ? { seat, options } : undefined;
+    })
+    .find((item): item is { seat: Seat; options: ClaimOption[] } => Boolean(item));
 
-  if (humanMeldOptions.length > 0) {
+  if (interactiveMeld) {
     const next = cloneGameState(state);
     next.pendingClaim = {
       id: createId("claim"),
       from,
       tile,
-      seat: HUMAN_SEAT,
-      options: humanMeldOptions,
+      seat: interactiveMeld.seat,
+      options: interactiveMeld.options,
     };
-    next.recentAction = `你可以操作 ${state.players[from].name} 打出的 ${tile.label}`;
+    next.recentAction =
+      interactiveMeld.seat === HUMAN_SEAT
+        ? `你可以操作 ${state.players[from].name} 打出的 ${tile.label}`
+        : `${state.players[interactiveMeld.seat].name}可以操作 ${state.players[from].name} 打出的 ${tile.label}`;
     next.logs = addLog(next.logs, next.recentAction);
     return next;
   }
@@ -515,20 +539,27 @@ function resolveDiscard(state: GameState, from: Seat, tile: Tile): GameState {
     return applyMeldOption(state, botMeld.seat, from, tile, botMeld.option);
   }
 
-  const humanChowOptions = getClaimOptionsForSeat(state, HUMAN_SEAT, from, tile).filter(
-    (option) => option.action === "chow",
-  );
+  const interactiveChow = seats
+    .filter((seat) => state.players[seat].type !== "bot")
+    .map((seat) => {
+      const options = getClaimOptionsForSeat(state, seat, from, tile).filter((option) => option.action === "chow");
+      return options.length > 0 ? { seat, options } : undefined;
+    })
+    .find((item): item is { seat: Seat; options: ClaimOption[] } => Boolean(item));
 
-  if (humanChowOptions.length > 0) {
+  if (interactiveChow) {
     const next = cloneGameState(state);
     next.pendingClaim = {
       id: createId("claim"),
       from,
       tile,
-      seat: HUMAN_SEAT,
-      options: humanChowOptions,
+      seat: interactiveChow.seat,
+      options: interactiveChow.options,
     };
-    next.recentAction = `你可以操作 ${state.players[from].name} 打出的 ${tile.label}`;
+    next.recentAction =
+      interactiveChow.seat === HUMAN_SEAT
+        ? `你可以操作 ${state.players[from].name} 打出的 ${tile.label}`
+        : `${state.players[interactiveChow.seat].name}可以操作 ${state.players[from].name} 打出的 ${tile.label}`;
     next.logs = addLog(next.logs, next.recentAction);
     return next;
   }
@@ -596,12 +627,12 @@ function finishWin(
   return next;
 }
 
-function createPlayers(names: PlayerNames): Player[] {
+function createPlayers(names: PlayerNames, seatTypes?: Partial<Record<Seat, SeatType>>): Player[] {
   return names.map((name, index) => ({
     seat: index as Seat,
     name,
     wind: WINDS[index],
-    type: index === HUMAN_SEAT ? "human" : "bot",
+    type: seatTypes?.[index as Seat] ?? (index === HUMAN_SEAT ? "human" : "bot"),
     hand: [],
     drawnTileId: undefined,
     melds: [],

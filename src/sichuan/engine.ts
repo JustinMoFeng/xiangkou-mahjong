@@ -16,6 +16,7 @@ import type {
   MeldKind,
   Player,
   Seat,
+  SeatType,
   Settlement,
   SettlementRow,
   SuitPrefix,
@@ -41,9 +42,15 @@ function createId(prefix = "id"): string {
   return `${prefix}-${idCounter}-${random}`;
 }
 
-export function createNewGame(seed = Date.now(), carriedScores?: number[], roundNumber = 1): GameState {
+export function createNewGame(
+  seed = Date.now(),
+  carriedScores?: number[],
+  roundNumber = 1,
+  names?: readonly string[],
+  seatTypes?: Partial<Record<Seat, SeatType>>,
+): GameState {
   const wall = shuffleTiles(createWall(), seed);
-  const players = createPlayers();
+  const players = createPlayers(names, seatTypes);
 
   if (carriedScores) {
     for (const player of players) {
@@ -89,7 +96,13 @@ export function createNewGame(seed = Date.now(), carriedScores?: number[], round
 }
 
 export function createNextRound(state: GameState, seed = Date.now()): GameState {
-  return createNewGame(seed, state.players.map((player) => player.score), state.roundNumber + 1);
+  return createNewGame(
+    seed,
+    state.players.map((player) => player.score),
+    state.roundNumber + 1,
+    state.players.map((player) => player.name),
+    Object.fromEntries(state.players.map((player) => [player.seat, player.type])) as Partial<Record<Seat, SeatType>>,
+  );
 }
 
 export function chooseMissingSuit(state: GameState, seat: Seat, suit: SuitPrefix): GameState {
@@ -245,42 +258,54 @@ export function playBotTurnStep(state: GameState): GameState {
 }
 
 export function canCurrentHumanSelfWin(state: GameState): boolean {
-  if (state.phase !== "playing" || state.pendingClaim || state.currentSeat !== HUMAN_SEAT || !state.awaitingDiscard) {
+  return canSeatSelfWin(state, HUMAN_SEAT);
+}
+
+export function canSeatSelfWin(state: GameState, seat: Seat): boolean {
+  if (state.phase !== "playing" || state.pendingClaim || state.currentSeat !== seat || !state.awaitingDiscard) {
     return false;
   }
-  const player = state.players[HUMAN_SEAT];
+  const player = state.players[seat];
   if (player.hasWon || !isCleanOfMissing(player)) {
     return false;
   }
   return checkWin(player.hand, player.melds);
 }
 
-export function claimSelfDraw(state: GameState): GameState {
-  if (!canCurrentHumanSelfWin(state)) {
+export function claimSelfDraw(state: GameState, seat: Seat = HUMAN_SEAT): GameState {
+  if (!canSeatSelfWin(state, seat)) {
     return state;
   }
-  const player = state.players[HUMAN_SEAT];
+  const player = state.players[seat];
   const drawn = player.hand.find((tile) => tile.id === player.drawnTileId) ?? player.hand[player.hand.length - 1];
   return finishWin(state, {
-    winner: HUMAN_SEAT,
-    from: HUMAN_SEAT,
+    winner: seat,
+    from: seat,
     tile: drawn,
     kind: "self-draw",
   });
 }
 
 export function canHumanConcealedKong(state: GameState): TileCode[] {
-  if (state.phase !== "playing" || state.pendingClaim || state.currentSeat !== HUMAN_SEAT || !state.awaitingDiscard) {
+  return canSeatConcealedKong(state, HUMAN_SEAT);
+}
+
+export function canSeatConcealedKong(state: GameState, seat: Seat): TileCode[] {
+  if (state.phase !== "playing" || state.pendingClaim || state.currentSeat !== seat || !state.awaitingDiscard) {
     return [];
   }
-  return concealedKongCodes(state.players[HUMAN_SEAT]);
+  return concealedKongCodes(state.players[seat]);
 }
 
 export function canHumanAddedKong(state: GameState): TileCode[] {
-  if (state.phase !== "playing" || state.pendingClaim || state.currentSeat !== HUMAN_SEAT || !state.awaitingDiscard) {
+  return canSeatAddedKong(state, HUMAN_SEAT);
+}
+
+export function canSeatAddedKong(state: GameState, seat: Seat): TileCode[] {
+  if (state.phase !== "playing" || state.pendingClaim || state.currentSeat !== seat || !state.awaitingDiscard) {
     return [];
   }
-  return addedKongCodes(state.players[HUMAN_SEAT]);
+  return addedKongCodes(state.players[seat]);
 }
 
 export function declareConcealedKong(state: GameState, seat: Seat, code: TileCode): GameState {
@@ -329,15 +354,15 @@ export function declareAddedKong(state: GameState, seat: Seat, code: TileCode): 
   const robbers = orderedSeatsAfter(seat).filter(
     (other) => !state.players[other].hasWon && canWinOn(state.players[other], handTile),
   );
-  const humanRob = robbers.includes(HUMAN_SEAT);
+  const interactiveRobber = robbers.find((seat) => state.players[seat].type !== "bot");
 
-  if (humanRob) {
+  if (interactiveRobber !== undefined) {
     const next = cloneGameState(state);
     next.pendingClaim = {
       id: createId("claim"),
       from: seat,
       tile: handTile,
-      seat: HUMAN_SEAT,
+      seat: interactiveRobber,
       options: [
         {
           id: `robkong-${handTile.id}`,
@@ -348,7 +373,10 @@ export function declareAddedKong(state: GameState, seat: Seat, code: TileCode): 
         },
       ],
     };
-    next.recentAction = `你可以抢杠胡 ${state.players[seat].name} 的 ${handTile.label}`;
+    next.recentAction =
+      interactiveRobber === HUMAN_SEAT
+        ? `你可以抢杠胡 ${state.players[seat].name} 的 ${handTile.label}`
+        : `${state.players[interactiveRobber].name}可以抢杠胡 ${state.players[seat].name} 的 ${handTile.label}`;
     next.logs = addLog(next.logs, next.recentAction);
     return next;
   }
@@ -515,11 +543,11 @@ function applyMeldOption(state: GameState, seat: Seat, from: Seat, tile: Tile, o
 function resolveDiscard(state: GameState, from: Seat, tile: Tile, fromKong: boolean): GameState {
   const others = orderedSeatsAfter(from).filter((seat) => !state.players[seat].hasWon);
   const winnableSeats = others.filter((seat) => canWinOn(state.players[seat], tile));
-  const humanCanWin = winnableSeats.includes(HUMAN_SEAT);
+  const interactiveWinner = winnableSeats.find((seat) => state.players[seat].type !== "bot");
   const botWinners = winnableSeats.filter((seat) => state.players[seat].type === "bot");
-  const humanMeld = getMeldOptionsForSeat(state, HUMAN_SEAT, from, tile);
 
-  if (humanCanWin) {
+  if (interactiveWinner !== undefined) {
+    const interactiveMeld = getMeldOptionsForSeat(state, interactiveWinner, from, tile);
     const options: ClaimOption[] = [
       {
         id: `win-${tile.id}`,
@@ -530,7 +558,7 @@ function resolveDiscard(state: GameState, from: Seat, tile: Tile, fromKong: bool
       },
     ];
     if (botWinners.length === 0) {
-      options.push(...humanMeld);
+      options.push(...interactiveMeld);
     }
 
     const next = cloneGameState(state);
@@ -538,10 +566,13 @@ function resolveDiscard(state: GameState, from: Seat, tile: Tile, fromKong: bool
       id: createId("claim"),
       from,
       tile,
-      seat: HUMAN_SEAT,
+      seat: interactiveWinner,
       options,
     };
-    next.recentAction = `你可以胡 ${state.players[from].name} 的 ${tile.label}`;
+    next.recentAction =
+      interactiveWinner === HUMAN_SEAT
+        ? `你可以胡 ${state.players[from].name} 的 ${tile.label}`
+        : `${state.players[interactiveWinner].name}可以胡 ${state.players[from].name} 的 ${tile.label}`;
     next.logs = addLog(next.logs, next.recentAction);
     return next;
   }
@@ -557,10 +588,21 @@ function resolveDiscard(state: GameState, from: Seat, tile: Tile, fromKong: bool
     });
   }
 
-  if (humanMeld.length > 0) {
+  const interactiveMeld = others
+    .filter((seat) => state.players[seat].type !== "bot")
+    .map((seat) => {
+      const options = getMeldOptionsForSeat(state, seat, from, tile);
+      return options.length > 0 ? { seat, options } : undefined;
+    })
+    .find((item): item is { seat: Seat; options: ClaimOption[] } => Boolean(item));
+
+  if (interactiveMeld) {
     const next = cloneGameState(state);
-    next.pendingClaim = { id: createId("claim"), from, tile, seat: HUMAN_SEAT, options: humanMeld };
-    next.recentAction = `你可以操作 ${state.players[from].name} 打出的 ${tile.label}`;
+    next.pendingClaim = { id: createId("claim"), from, tile, seat: interactiveMeld.seat, options: interactiveMeld.options };
+    next.recentAction =
+      interactiveMeld.seat === HUMAN_SEAT
+        ? `你可以操作 ${state.players[from].name} 打出的 ${tile.label}`
+        : `${state.players[interactiveMeld.seat].name}可以操作 ${state.players[from].name} 打出的 ${tile.label}`;
     next.logs = addLog(next.logs, next.recentAction);
     return next;
   }
@@ -921,11 +963,18 @@ function isFirstDiscard(state: GameState): boolean {
   return totalDiscards === 1;
 }
 
-function createPlayers(): Player[] {
-  return PLAYER_NAMES.map((name, index) => ({
+function normalizePlayerNames(names?: readonly string[]): [string, string, string, string] {
+  return PLAYER_NAMES.map((fallback, index) => {
+    const trimmed = names?.[index]?.trim();
+    return trimmed ? trimmed.slice(0, 16) : fallback;
+  }) as [string, string, string, string];
+}
+
+function createPlayers(names?: readonly string[], seatTypes?: Partial<Record<Seat, SeatType>>): Player[] {
+  return normalizePlayerNames(names).map((name, index) => ({
     seat: index as Seat,
     name,
-    type: index === HUMAN_SEAT ? "human" : "bot",
+    type: seatTypes?.[index as Seat] ?? (index === HUMAN_SEAT ? "human" : "bot"),
     hand: [],
     drawnTileId: undefined,
     melds: [],

@@ -128,6 +128,6 @@ export function tileColorClass(code: TileCode): string {
   return "tile--honor";
 }
 
-export function tileAssetPath(code: TileCode): string {
+export function tileAssetPath(code: TileCode | "back"): string {
   return `${import.meta.env.BASE_URL}tiles/${code}.svg`;
 }

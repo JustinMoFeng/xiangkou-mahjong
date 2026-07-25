@@ -11,7 +11,7 @@ export type Tile = {
 };
 
 export type Seat = 0 | 1 | 2 | 3;
-export type SeatType = "human" | "bot";
+export type SeatType = "human" | "bot" | "remote";
 
 export type Phase = "choosing-missing" | "playing" | "finished";
 
