@@ -2,12 +2,25 @@ import { useEffect, useState } from "react";
 import App from "./App";
 import Home, { SichuanModeSelect, XiangkouModeSelect, type GameMode } from "./Home";
 import LinkMatchApp from "./link-match/LinkMatchApp";
+import { SichuanCreateRoom, SichuanJoinRoom } from "./online/SichuanRoom";
+import { XiangkouCreateRoom, XiangkouJoinRoom } from "./online/XiangkouRoom";
 import SichuanApp from "./sichuan/SichuanApp";
 import YangYangApp from "./yangyang/YangYangApp";
 import "./sichuan/sichuan.css";
 import "./home.css";
 
-type View = "home" | "xiangkou" | "sichuanMode" | "classic" | "sichuan" | "link-match" | "yangyang";
+type View =
+  | "home"
+  | "xiangkou"
+  | "xiangkouRoomCreate"
+  | "xiangkouRoomJoin"
+  | "sichuanMode"
+  | "sichuanRoomCreate"
+  | "sichuanRoomJoin"
+  | "classic"
+  | "sichuan"
+  | "link-match"
+  | "yangyang";
 
 const BASE_PATH = new URL(import.meta.env.BASE_URL, window.location.origin).pathname.replace(/\/+$/, "");
 
@@ -55,11 +68,23 @@ function resolveView(): View {
   if (path === "/classic" || path === "/play/xiangkou/bot") {
     return "classic";
   }
+  if (path === "/play/xiangkou/room/create") {
+    return "xiangkouRoomCreate";
+  }
+  if (path === "/play/xiangkou/room" || path.startsWith("/play/xiangkou/room/")) {
+    return "xiangkouRoomJoin";
+  }
   if (path === "/game/sichuan") {
     return "sichuanMode";
   }
   if (path === "/sichuan" || path === "/play/sichuan/bot") {
     return "sichuan";
+  }
+  if (path === "/play/sichuan/room/create") {
+    return "sichuanRoomCreate";
+  }
+  if (path === "/play/sichuan/room" || path.startsWith("/play/sichuan/room/")) {
+    return "sichuanRoomJoin";
   }
   if (path === "/play/link-match") {
     return "link-match";
@@ -107,8 +132,26 @@ export default function Root() {
     navigate("/play/xiangkou/bot", "classic");
   }
 
+  function createXiangkouRoom() {
+    navigate("/play/xiangkou/room/create", "xiangkouRoomCreate");
+  }
+
+  function joinXiangkouRoom(roomCode?: string) {
+    const suffix = roomCode ? `/${roomCode}` : "";
+    navigate(`/play/xiangkou/room${suffix}`, "xiangkouRoomJoin");
+  }
+
   function enterSichuanBot() {
     navigate("/play/sichuan/bot", "sichuan");
+  }
+
+  function createSichuanRoom() {
+    navigate("/play/sichuan/room/create", "sichuanRoomCreate");
+  }
+
+  function joinSichuanRoom(roomCode?: string) {
+    const suffix = roomCode ? `/${roomCode}` : "";
+    navigate(`/play/sichuan/room${suffix}`, "sichuanRoomJoin");
   }
 
   function backHome() {
@@ -120,11 +163,55 @@ export default function Root() {
   }
 
   if (view === "xiangkou") {
-    return <XiangkouModeSelect onBackHome={backHome} onEnterBot={enterClassicBot} />;
+    return (
+      <XiangkouModeSelect
+        onBackHome={backHome}
+        onEnterBot={enterClassicBot}
+        onCreateRoom={createXiangkouRoom}
+        onJoinRoom={joinXiangkouRoom}
+      />
+    );
+  }
+
+  if (view === "xiangkouRoomCreate") {
+    return <XiangkouCreateRoom onBackMode={() => navigate("/game/xiangkou", "xiangkou")} />;
+  }
+
+  if (view === "xiangkouRoomJoin") {
+    const path = appPath(window.location.pathname);
+    const roomCode = path.startsWith("/play/xiangkou/room/") ? path.slice("/play/xiangkou/room/".length) : "";
+    return (
+      <XiangkouJoinRoom
+        initialRoomCode={roomCode}
+        onBackMode={() => navigate("/game/xiangkou", "xiangkou")}
+      />
+    );
   }
 
   if (view === "sichuanMode") {
-    return <SichuanModeSelect onBackHome={backHome} onEnterBot={enterSichuanBot} />;
+    return (
+      <SichuanModeSelect
+        onBackHome={backHome}
+        onEnterBot={enterSichuanBot}
+        onCreateRoom={createSichuanRoom}
+        onJoinRoom={joinSichuanRoom}
+      />
+    );
+  }
+
+  if (view === "sichuanRoomCreate") {
+    return <SichuanCreateRoom onBackMode={() => navigate("/game/sichuan", "sichuanMode")} />;
+  }
+
+  if (view === "sichuanRoomJoin") {
+    const path = appPath(window.location.pathname);
+    const roomCode = path.startsWith("/play/sichuan/room/") ? path.slice("/play/sichuan/room/".length) : "";
+    return (
+      <SichuanJoinRoom
+        initialRoomCode={roomCode}
+        onBackMode={() => navigate("/game/sichuan", "sichuanMode")}
+      />
+    );
   }
 
   if (view === "sichuan") {

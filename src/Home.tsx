@@ -1,4 +1,6 @@
-import { ArrowLeft, Bot, ChevronRight, Grid3X3, Layers3, Sparkles, Users } from "lucide-react";
+import { ArrowLeft, Bot, ChevronRight, Grid3X3, Layers3, Plus, Sparkles, Users } from "lucide-react";
+import { FormEvent, useState } from "react";
+import { normalizeRoomCode } from "./online/signaling";
 
 export type GameMode = "xiangkou" | "sichuan" | "link-match" | "yangyang";
 
@@ -74,12 +76,104 @@ export default function Home({ onSelect }: { onSelect: (mode: GameMode) => void 
   );
 }
 
+function FriendsRoomJoinCard({
+  label,
+  description,
+  modalEyebrow,
+  modalDescription,
+  onCreateRoom,
+  onJoinRoom,
+}: {
+  label: string;
+  description: string;
+  modalEyebrow: string;
+  modalDescription: string;
+  onCreateRoom: () => void;
+  onJoinRoom: (roomCode?: string) => void;
+}) {
+  const [roomCode, setRoomCode] = useState("");
+  const [joinError, setJoinError] = useState("");
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+
+  function submitJoin(event: FormEvent) {
+    event.preventDefault();
+    const normalized = normalizeRoomCode(roomCode);
+    if (normalized.length !== 6) {
+      setJoinError("请输入 6 位房间号");
+      return;
+    }
+    onJoinRoom(normalized);
+  }
+
+  return (
+    <>
+      <section className="home-card home-card--friends room-join-card" aria-label={`加入${label}朋友房间`}>
+        <div className="home-card__icon">
+          <Users size={28} />
+        </div>
+        <div className="home-card__body">
+          <h3>朋友房间</h3>
+          <p>{description}</p>
+        </div>
+        <form className="room-inline-form" onSubmit={submitJoin}>
+          <label className="room-field room-field--inline">
+            <span>房间号</span>
+            <input
+              value={roomCode}
+              maxLength={6}
+              inputMode="numeric"
+              onChange={(event) => {
+                setRoomCode(normalizeRoomCode(event.target.value));
+                setJoinError("");
+              }}
+              placeholder="输入 6 位房间号"
+            />
+          </label>
+          <button className="room-primary" type="submit">
+            加入
+          </button>
+          <button className="room-secondary" type="button" onClick={() => setIsCreateOpen(true)}>
+            <Plus size={17} />
+            创建
+          </button>
+        </form>
+        {joinError ? <p className="room-error">{joinError}</p> : null}
+      </section>
+
+      {isCreateOpen ? (
+        <div className="room-modal-backdrop" role="dialog" aria-modal="true" aria-label={`创建${label}朋友房间`}>
+          <section className="room-create-modal">
+            <div>
+              <p className="home-eyebrow">{modalEyebrow}</p>
+              <h2>创建房间</h2>
+              <p>{modalDescription}</p>
+            </div>
+            <div className="room-actions">
+              <button className="room-secondary" type="button" onClick={() => setIsCreateOpen(false)}>
+                取消
+              </button>
+              <button className="room-primary" type="button" onClick={onCreateRoom}>
+                <Plus size={18} />
+                创建房间
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
 export function XiangkouModeSelect({
   onBackHome,
   onEnterBot,
+  onCreateRoom,
+  onJoinRoom,
 }: {
   onBackHome: () => void;
   onEnterBot: () => void;
+  onCreateRoom: () => void;
+  onJoinRoom: (roomCode?: string) => void;
 }) {
   return (
     <main className="home-shell" aria-label="巷口麻将开桌方式">
@@ -92,7 +186,7 @@ export function XiangkouModeSelect({
           <div>
             <p className="home-eyebrow">巷口麻将</p>
             <h1>选择开桌方式</h1>
-            <p className="home-sub">当前可进入人机练习，朋友房间稍后开放</p>
+            <p className="home-sub">输入房间号加入朋友牌桌，或自己开房邀请好友。</p>
           </div>
         </header>
 
@@ -108,16 +202,14 @@ export function XiangkouModeSelect({
             <ChevronRight className="home-card__go" size={22} />
           </button>
 
-          <button className="home-card home-card--locked" disabled aria-label="朋友房间敬请期待">
-            <div className="home-card__icon">
-              <Users size={28} />
-            </div>
-            <div className="home-card__body">
-              <h3>朋友房间</h3>
-              <p>房主开房、房间号加入和实时同步还在搭桌中。</p>
-            </div>
-            <span className="home-card__badge">敬请期待</span>
-          </button>
+          <FriendsRoomJoinCard
+            label="巷口麻将"
+            description="输入 6 位房间号加入好友牌桌。没有房间号时，可以创建房间再分享给朋友。"
+            modalEyebrow="巷口麻将 · 朋友房间"
+            modalDescription="生成 6 位房间号，好友加入后由房主开始，空座自动机器人补位。"
+            onCreateRoom={onCreateRoom}
+            onJoinRoom={onJoinRoom}
+          />
         </div>
       </section>
     </main>
@@ -127,9 +219,13 @@ export function XiangkouModeSelect({
 export function SichuanModeSelect({
   onBackHome,
   onEnterBot,
+  onCreateRoom,
+  onJoinRoom,
 }: {
   onBackHome: () => void;
   onEnterBot: () => void;
+  onCreateRoom: () => void;
+  onJoinRoom: (roomCode?: string) => void;
 }) {
   return (
     <main className="home-shell" aria-label="四川麻将开桌方式">
@@ -142,7 +238,7 @@ export function SichuanModeSelect({
           <div>
             <p className="home-eyebrow">川麻 · 血战到底</p>
             <h1>选择开桌方式</h1>
-            <p className="home-sub">当前可进入人机血战，朋友房间稍后开放</p>
+            <p className="home-sub">输入房间号加入血战牌桌，或自己开房邀请好友。</p>
           </div>
         </header>
 
@@ -158,16 +254,14 @@ export function SichuanModeSelect({
             <ChevronRight className="home-card__go" size={22} />
           </button>
 
-          <button className="home-card home-card--locked" disabled aria-label="川麻朋友房间敬请期待">
-            <div className="home-card__icon">
-              <Users size={28} />
-            </div>
-            <div className="home-card__body">
-              <h3>朋友房间</h3>
-              <p>川麻开房、邀请好友和实时结算同步还在搭桌中。</p>
-            </div>
-            <span className="home-card__badge">敬请期待</span>
-          </button>
+          <FriendsRoomJoinCard
+            label="川麻"
+            description="输入 6 位房间号加入血战牌桌。没有房间号时，可以创建房间再分享给朋友。"
+            modalEyebrow="川麻 · 朋友房间"
+            modalDescription="生成 6 位房间号，好友加入后由房主开始血战，空座自动机器人补位。"
+            onCreateRoom={onCreateRoom}
+            onJoinRoom={onJoinRoom}
+          />
         </div>
       </section>
     </main>

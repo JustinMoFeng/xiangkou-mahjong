@@ -1,10 +1,10 @@
-import { AlignJustify, Bot, CircleHelp, Home as HomeIcon, Pause, Play, RotateCcw, Sparkles, Trophy, X } from "lucide-react";
+import { AlignJustify, Bot, CircleHelp, Home as HomeIcon, Pause, Play, RotateCcw, Sparkles, Trophy, Users, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
   arrangeHand,
-  canCurrentHumanSelfWin,
-  canHumanAddedKong,
-  canHumanConcealedKong,
+  canSeatAddedKong,
+  canSeatConcealedKong,
+  canSeatSelfWin,
   chooseMissingSuit,
   claimMeld,
   claimSelfDraw,
@@ -21,7 +21,9 @@ import {
 import { BASE_POINTS, MAX_FAN } from "./rules";
 import { clearSavedGame, loadSavedGame, saveGame } from "./storage";
 import { SUIT_LABELS, tileAssetPath, tileColorClass } from "./tiles";
-import type { ClaimOption, GameState, Meld, Player, SuitPrefix, Tile, TileCode } from "./types";
+import type { ClaimOption, GameState, Meld, Player, Seat, SeatType, SuitPrefix, Tile, TileCode } from "./types";
+import { applySichuanHostPlayerAction, type SichuanPlayerAction } from "../online/sichuanActions";
+import type { OnlineConnectionState } from "../online/protocol";
 
 const relationLabels = ["本家", "下家", "对家", "上家"] as const;
 const suitOrder: SuitPrefix[] = ["m", "p", "s"];
@@ -33,35 +35,113 @@ function meldLabel(kind: Meld["kind"]): string {
   return "杠";
 }
 
-export default function SichuanApp({ onBackHome }: { onBackHome?: () => void }) {
-  const [state, setState] = useState<GameState>(() => loadSavedGame() ?? createNewGame());
+function seatOffset(seat: Seat, perspectiveSeat: Seat): number {
+  return (seat - perspectiveSeat + 4) % 4;
+}
+
+function relationLabel(seat: Seat, perspectiveSeat: Seat): (typeof relationLabels)[number] {
+  return relationLabels[seatOffset(seat, perspectiveSeat)];
+}
+
+function getSeatPositions(perspectiveSeat: Seat): { top: Seat; left: Seat; right: Seat } {
+  return {
+    top: ((perspectiveSeat + 2) % 4) as Seat,
+    left: ((perspectiveSeat + 3) % 4) as Seat,
+    right: ((perspectiveSeat + 1) % 4) as Seat,
+  };
+}
+
+function getSeatTypes(state: GameState): Partial<Record<Seat, SeatType>> {
+  return Object.fromEntries(state.players.map((player) => [player.seat, player.type])) as Partial<Record<Seat, SeatType>>;
+}
+
+export type SichuanOnlineTableConfig = {
+  role: "host" | "guest";
+  roomCode: string;
+  seat: Seat;
+  connectionState: OnlineConnectionState;
+  state?: GameState;
+  incomingAction?: {
+    requestId: string;
+    action: SichuanPlayerAction;
+  };
+  onHostStateChange?: (state: GameState) => void;
+  onHostActionResult?: (result: { requestId: string; ok: boolean; reason?: string; state: GameState }) => void;
+  onPlayerAction?: (action: SichuanPlayerAction) => void;
+  onLeaveRoom?: () => void;
+};
+
+export default function SichuanApp({ onBackHome, online }: { onBackHome?: () => void; online?: SichuanOnlineTableConfig }) {
+  const [state, setState] = useState<GameState>(() => online?.state ?? loadSavedGame() ?? createNewGame());
   const [highlightedTileIds, setHighlightedTileIds] = useState<string[]>([]);
   const [isPaused, setIsPaused] = useState(false);
   const [isRulesHelpOpen, setIsRulesHelpOpen] = useState(false);
   const [kongMenuOpen, setKongMenuOpen] = useState(false);
 
-  const human = state.players[0];
+  const isOnline = Boolean(online);
+  const localSeat = online?.seat ?? 0;
+  const human = state.players[localSeat];
   const currentPlayer = state.players[state.currentSeat];
-  const humanPendingClaim = state.pendingClaim?.seat === 0 ? state.pendingClaim : undefined;
-  const humanCanSelfWin = canCurrentHumanSelfWin(state);
-  const concealedKongs = canHumanConcealedKong(state);
-  const addedKongs = canHumanAddedKong(state);
+  const humanPendingClaim = state.pendingClaim?.seat === localSeat ? state.pendingClaim : undefined;
+  const humanCanSelfWin = canSeatSelfWin(state, localSeat);
+  const concealedKongs = canSeatConcealedKong(state, localSeat);
+  const addedKongs = canSeatAddedKong(state, localSeat);
   const kongCodes = [...concealedKongs, ...addedKongs];
   const isChoosingMissing = state.phase === "choosing-missing";
   const humanMustDiscardMissing = hasMissingSuitTiles(human);
+  const canOperateLocally = !isOnline || online?.role === "host";
+  const isGuestTable = online?.role === "guest";
+  const seatPositions = getSeatPositions(localSeat);
 
   useEffect(() => {
+    if (!online?.state) {
+      return;
+    }
+    setState(online.state);
+  }, [online?.state]);
+
+  useEffect(() => {
+    if (isOnline) {
+      return;
+    }
     saveGame(state);
-  }, [state]);
+  }, [isOnline, state]);
 
   useEffect(() => {
+    if (isOnline) {
+      return undefined;
+    }
     const saveBeforeUnload = () => saveGame(state);
     window.addEventListener("pagehide", saveBeforeUnload);
     return () => window.removeEventListener("pagehide", saveBeforeUnload);
-  }, [state]);
+  }, [isOnline, state]);
 
   useEffect(() => {
-    if (isPaused || state.phase !== "playing" || state.pendingClaim || currentPlayer.type !== "bot" || currentPlayer.hasWon) {
+    if (!online || online.role !== "host") {
+      return;
+    }
+    online.onHostStateChange?.(state);
+  }, [online, state]);
+
+  useEffect(() => {
+    if (online?.role !== "host" || !online.incomingAction) {
+      return;
+    }
+    const incoming = online.incomingAction;
+    setState((current) => {
+      const result = applySichuanHostPlayerAction(current, incoming.action);
+      online.onHostActionResult?.({
+        requestId: incoming.requestId,
+        ok: result.ok,
+        reason: result.ok ? undefined : result.reason,
+        state: result.state,
+      });
+      return result.state;
+    });
+  }, [online?.incomingAction?.requestId]);
+
+  useEffect(() => {
+    if (isGuestTable || isPaused || state.phase !== "playing" || state.pendingClaim || currentPlayer.type !== "bot" || currentPlayer.hasWon) {
       return;
     }
     const delay = state.awaitingDiscard ? 1150 : 850;
@@ -72,6 +152,7 @@ export default function SichuanApp({ onBackHome }: { onBackHome?: () => void }) 
   }, [
     currentPlayer.type,
     currentPlayer.hasWon,
+    isGuestTable,
     isPaused,
     state.awaitingDiscard,
     state.currentSeat,
@@ -83,10 +164,11 @@ export default function SichuanApp({ onBackHome }: { onBackHome?: () => void }) 
 
   useEffect(() => {
     if (
+      isGuestTable ||
       isPaused ||
       state.phase !== "playing" ||
       state.pendingClaim ||
-      state.currentSeat !== 0 ||
+      state.currentSeat !== localSeat ||
       state.awaitingDiscard ||
       human.hasWon
     ) {
@@ -96,7 +178,35 @@ export default function SichuanApp({ onBackHome }: { onBackHome?: () => void }) 
       setState((current) => drawForCurrentSeat(current));
     }, 550);
     return () => window.clearTimeout(timer);
-  }, [human.hasWon, isPaused, state.awaitingDiscard, state.currentSeat, state.pendingClaim, state.phase, state.turn]);
+  }, [human.hasWon, isGuestTable, isPaused, localSeat, state.awaitingDiscard, state.currentSeat, state.pendingClaim, state.phase, state.turn]);
+
+  useEffect(() => {
+    if (
+      online?.role !== "host" ||
+      isPaused ||
+      state.phase !== "playing" ||
+      state.pendingClaim ||
+      currentPlayer.type !== "remote" ||
+      currentPlayer.hasWon ||
+      state.awaitingDiscard
+    ) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setState((current) => drawForCurrentSeat(current));
+    }, 550);
+    return () => window.clearTimeout(timer);
+  }, [
+    currentPlayer.hasWon,
+    currentPlayer.type,
+    isPaused,
+    online?.role,
+    state.awaitingDiscard,
+    state.currentSeat,
+    state.pendingClaim,
+    state.phase,
+    state.turn,
+  ]);
 
   useEffect(() => {
     setHighlightedTileIds([]);
@@ -104,51 +214,98 @@ export default function SichuanApp({ onBackHome }: { onBackHome?: () => void }) 
   }, [humanPendingClaim?.id, isPaused, state.turn]);
 
   function restart() {
+    if (online?.role === "guest") {
+      return;
+    }
     clearSavedGame();
     setIsPaused(false);
-    setState(createNewGame());
+    const next = createNewGame(
+      Date.now(),
+      undefined,
+      1,
+      state.players.map((player) => player.name),
+      getSeatTypes(state),
+    );
+    next.roomId = online?.roomCode ?? "LOCAL-SICHUAN";
+    setState(next);
   }
 
   function nextRound() {
+    if (online?.role === "guest") {
+      return;
+    }
     setIsPaused(false);
     setState(createNextRound(state));
   }
 
   function onChooseMissing(suit: SuitPrefix) {
-    setState((current) => chooseMissingSuit(current, 0, suit));
+    dispatchLocalAction({ type: "chooseMissing", seat: localSeat, suit });
   }
 
   function onDiscard(tile: Tile) {
-    if (state.phase !== "playing" || state.currentSeat !== 0 || state.pendingClaim || !state.awaitingDiscard) {
+    if (state.phase !== "playing" || state.currentSeat !== localSeat || state.pendingClaim || !state.awaitingDiscard) {
       return;
     }
-    setState((current) => discardTile(current, 0, tile.id));
+    dispatchLocalAction({ type: "discard", seat: localSeat, tileId: tile.id });
   }
 
   function onSelfDraw() {
-    setState((current) => claimSelfDraw(current));
+    dispatchLocalAction({ type: "selfDraw", seat: localSeat });
   }
 
   function onKong(code: TileCode) {
     setKongMenuOpen(false);
     if (concealedKongs.includes(code)) {
-      setState((current) => declareConcealedKong(current, 0, code));
+      dispatchLocalAction({ type: "kong", seat: localSeat, code, kind: "concealed" });
     } else {
-      setState((current) => declareAddedKong(current, 0, code));
+      dispatchLocalAction({ type: "kong", seat: localSeat, code, kind: "added" });
     }
   }
 
   function onClaimWin() {
-    setState((current) => claimWin(current, 0));
+    dispatchLocalAction({ type: "claimWin", seat: localSeat });
   }
 
   function onClaimMeld(optionId: string) {
-    setState((current) => claimMeld(current, 0, optionId));
+    dispatchLocalAction({ type: "claimMeld", seat: localSeat, optionId });
     setHighlightedTileIds([]);
   }
 
   function onPassClaim() {
-    setState((current) => passClaim(current, 0));
+    dispatchLocalAction({ type: "passClaim", seat: localSeat });
+  }
+
+  function onArrangeHand() {
+    dispatchLocalAction({ type: "arrangeHand", seat: localSeat });
+  }
+
+  function dispatchLocalAction(action: SichuanPlayerAction) {
+    if (!canOperateLocally) {
+      online?.onPlayerAction?.(action);
+      return;
+    }
+    setState((current) => {
+      switch (action.type) {
+        case "chooseMissing":
+          return chooseMissingSuit(current, action.seat, action.suit);
+        case "arrangeHand":
+          return arrangeHand(current, action.seat);
+        case "discard":
+          return discardTile(current, action.seat, action.tileId);
+        case "claimWin":
+          return claimWin(current, action.seat);
+        case "claimMeld":
+          return claimMeld(current, action.seat, action.optionId);
+        case "passClaim":
+          return passClaim(current, action.seat);
+        case "selfDraw":
+          return claimSelfDraw(current, action.seat);
+        case "kong":
+          return action.kind === "concealed"
+            ? declareConcealedKong(current, action.seat, action.code)
+            : declareAddedKong(current, action.seat, action.code);
+      }
+    });
   }
 
   const winnerCount = state.players.filter((player) => player.hasWon).length;
@@ -162,19 +319,26 @@ export default function SichuanApp({ onBackHome }: { onBackHome?: () => void }) 
         </div>
       </div>
       <section className="game-frame" aria-label="川麻牌桌">
-        <Header state={state} onPause={() => setIsPaused(true)} onOpenHelp={() => setIsRulesHelpOpen(true)} onBackHome={onBackHome} />
+        <Header
+          state={state}
+          online={online}
+          localSeat={localSeat}
+          onPause={() => setIsPaused(true)}
+          onOpenHelp={() => setIsRulesHelpOpen(true)}
+          onBackHome={online?.onLeaveRoom ?? onBackHome}
+        />
 
         <section className="mahjong-table" aria-label="四人川麻桌">
           <div className="table-felt" aria-hidden="true" />
-          <TableSeat player={state.players[2]} position="top" active={state.currentSeat === 2} />
-          <TableSeat player={state.players[3]} position="left" active={state.currentSeat === 3} />
-          <TableSeat player={state.players[1]} position="right" active={state.currentSeat === 1} />
+          <TableSeat player={state.players[seatPositions.top]} perspectiveSeat={localSeat} position="top" active={state.currentSeat === seatPositions.top} />
+          <TableSeat player={state.players[seatPositions.left]} perspectiveSeat={localSeat} position="left" active={state.currentSeat === seatPositions.left} />
+          <TableSeat player={state.players[seatPositions.right]} perspectiveSeat={localSeat} position="right" active={state.currentSeat === seatPositions.right} />
 
           <section className="river-board" aria-label="四家河牌">
-            <RiverZone player={state.players[2]} position="top" lastDiscard={state.lastDiscard} />
-            <RiverZone player={state.players[3]} position="left" lastDiscard={state.lastDiscard} />
-            <RiverZone player={state.players[1]} position="right" lastDiscard={state.lastDiscard} />
-            <RiverZone player={state.players[0]} position="bottom" lastDiscard={state.lastDiscard} />
+            <RiverZone player={state.players[seatPositions.top]} perspectiveSeat={localSeat} position="top" lastDiscard={state.lastDiscard} />
+            <RiverZone player={state.players[seatPositions.left]} perspectiveSeat={localSeat} position="left" lastDiscard={state.lastDiscard} />
+            <RiverZone player={state.players[seatPositions.right]} perspectiveSeat={localSeat} position="right" lastDiscard={state.lastDiscard} />
+            <RiverZone player={state.players[localSeat]} perspectiveSeat={localSeat} position="bottom" lastDiscard={state.lastDiscard} />
             <div className="wall-counter">
               <span>余牌 {state.wall.length}</span>
             </div>
@@ -184,8 +348,8 @@ export default function SichuanApp({ onBackHome }: { onBackHome?: () => void }) 
             </div>
           </section>
 
-          <section className={`human-area ${state.currentSeat === 0 && !human.hasWon ? "is-active" : ""}`} aria-label="你的手牌">
-            <PlayerStatus player={human} active={state.currentSeat === 0} />
+          <section className={`human-area ${state.currentSeat === localSeat && !human.hasWon ? "is-active" : ""}`} aria-label="你的手牌">
+            <PlayerStatus player={human} perspectiveSeat={localSeat} active={state.currentSeat === localSeat} />
             <div className="hand-row">
               <MeldRow melds={human.melds} />
               {human.hand.map((tile) => (
@@ -197,7 +361,7 @@ export default function SichuanApp({ onBackHome }: { onBackHome?: () => void }) 
                   disabled={
                     isPaused ||
                     state.phase !== "playing" ||
-                    state.currentSeat !== 0 ||
+                    state.currentSeat !== localSeat ||
                     Boolean(state.pendingClaim) ||
                     !state.awaitingDiscard ||
                     human.hasWon ||
@@ -256,7 +420,7 @@ export default function SichuanApp({ onBackHome }: { onBackHome?: () => void }) 
                     </div>
                   ) : null}
                 </div>
-                <button className="secondary-command" onClick={() => setState((current) => arrangeHand(current, 0))}>
+                <button className="secondary-command" onClick={onArrangeHand}>
                   <AlignJustify size={18} />
                   整理牌
                 </button>
@@ -265,11 +429,11 @@ export default function SichuanApp({ onBackHome }: { onBackHome?: () => void }) 
           </div>
         </section>
 
-        {isChoosingMissing ? <MissingSuitOverlay human={human} onChoose={onChooseMissing} /> : null}
+        {isChoosingMissing && !human.missingSuit ? <MissingSuitOverlay human={human} onChoose={onChooseMissing} /> : null}
         {state.phase === "finished" ? (
           <ResultOverlay state={state} onRestart={restart} onNextRound={nextRound} onBackHome={onBackHome} />
         ) : null}
-        {isPaused ? <PauseOverlay state={state} onResume={() => setIsPaused(false)} onRestart={restart} /> : null}
+        {isPaused && online?.role !== "guest" ? <PauseOverlay state={state} onResume={() => setIsPaused(false)} onRestart={restart} /> : null}
         {isRulesHelpOpen ? <SichuanRulesHelpOverlay onClose={() => setIsRulesHelpOpen(false)} /> : null}
       </section>
     </main>
@@ -278,20 +442,38 @@ export default function SichuanApp({ onBackHome }: { onBackHome?: () => void }) 
 
 function Header({
   state,
+  online,
+  localSeat,
   onPause,
   onOpenHelp,
   onBackHome,
 }: {
   state: GameState;
+  online?: SichuanOnlineTableConfig;
+  localSeat: Seat;
   onPause: () => void;
   onOpenHelp: () => void;
   onBackHome?: () => void;
 }) {
-  const human = state.players[0];
+  const human = state.players[localSeat];
+  const modeLabel = online ? `朋友房间 ${online.roomCode}` : "血战到底";
+  const connectionLabel =
+    online?.connectionState === "reconnecting"
+      ? "重连中"
+      : online?.connectionState === "disconnected"
+        ? "已断开"
+        : online?.role === "host"
+          ? "房主"
+          : online?.role === "guest"
+            ? "加入者"
+            : undefined;
+
   return (
     <header className="top-bar">
       <div>
-        <p className="eyebrow">血战到底 · 第 {state.roundNumber} 局</p>
+        <p className="eyebrow">
+          {modeLabel} · 第 {state.roundNumber} 局
+        </p>
         <h1>川麻</h1>
       </div>
 
@@ -307,9 +489,10 @@ function Header({
 
       <div className="mode-actions">
         <button className="mode-button mode-button--active">
-          <Bot size={17} />
-          人机血战
+          {online ? <Users size={17} /> : <Bot size={17} />}
+          {online ? "朋友房间" : "人机血战"}
         </button>
+        {connectionLabel ? <span className={`connection-pill connection-pill--${online?.connectionState}`}>{connectionLabel}</span> : null}
         {onBackHome ? (
           <button className="icon-command" onClick={onBackHome} title="返回首页" aria-label="返回首页">
             <HomeIcon size={18} />
@@ -318,9 +501,11 @@ function Header({
         <button className="icon-command" onClick={onOpenHelp} title="查看川麻帮助" aria-label="查看川麻帮助">
           <CircleHelp size={18} />
         </button>
-        <button className="icon-command" onClick={onPause} title="暂停" aria-label="暂停">
-          <Pause size={18} />
-        </button>
+        {online?.role !== "guest" ? (
+          <button className="icon-command" onClick={onPause} title="暂停" aria-label="暂停">
+            <Pause size={18} />
+          </button>
+        ) : null}
       </div>
     </header>
   );
@@ -328,10 +513,12 @@ function Header({
 
 function TableSeat({
   player,
+  perspectiveSeat,
   position,
   active,
 }: {
   player: Player;
+  perspectiveSeat: Seat;
   position: "top" | "left" | "right";
   active: boolean;
 }) {
@@ -340,7 +527,7 @@ function TableSeat({
       className={`table-seat table-seat--${position} ${active ? "is-active" : ""} ${player.hasWon ? "sc-seat-won" : ""}`}
       aria-label={`${player.name}区域`}
     >
-      <PlayerStatus player={player} active={active} />
+      <PlayerStatus player={player} perspectiveSeat={perspectiveSeat} active={active} />
       <div className="table-seat__rack">
         <MeldRow melds={player.melds} compact />
         <div className="concealed-hand" aria-label={`${player.name}手牌`}>
@@ -359,10 +546,12 @@ function TableSeat({
 
 function RiverZone({
   player,
+  perspectiveSeat,
   position,
   lastDiscard,
 }: {
   player: Player;
+  perspectiveSeat: Seat;
   position: "top" | "left" | "right" | "bottom";
   lastDiscard?: GameState["lastDiscard"];
 }) {
@@ -371,7 +560,7 @@ function RiverZone({
   return (
     <section className={`river-zone river-zone--${position}`} aria-label={`${player.name}河牌`}>
       <span className="river-zone__name">
-        {relationLabels[player.seat]} · {player.name}
+        {relationLabel(player.seat, perspectiveSeat)} · {player.name}
         {player.missingSuit ? <em className="sc-miss">缺{SUIT_LABELS[player.missingSuit]}</em> : null}
       </span>
       <div className="river-zone__tiles">
@@ -392,12 +581,12 @@ function RiverZone({
   );
 }
 
-function PlayerStatus({ player, active }: { player: Player; active: boolean }) {
+function PlayerStatus({ player, perspectiveSeat, active }: { player: Player; perspectiveSeat: Seat; active: boolean }) {
   return (
     <div className={`player-status ${active ? "is-active" : ""}`}>
       <div>
         <strong>
-          <span className="relation-badge">{relationLabels[player.seat]}</span>
+          <span className="relation-badge">{relationLabel(player.seat, perspectiveSeat)}</span>
           {player.name}
         </strong>
         <span>{player.missingSuit ? `缺${SUIT_LABELS[player.missingSuit]}` : "未定缺"}</span>
@@ -485,13 +674,15 @@ function TileFace({
   fresh?: boolean;
   highlighted?: boolean;
 }) {
+  const isHidden = tile.id.startsWith("hidden-");
+
   return (
     <span
       className={`tile-face ${tileColorClass(tile.code)} ${compact ? "tile-face--compact" : ""} ${
         fresh ? "is-fresh" : ""
       } ${highlighted ? "is-highlighted" : ""}`}
     >
-      <img className="tile-face__image" src={tileAssetPath(tile.code)} alt={tile.label} draggable={false} />
+      <img className="tile-face__image" src={tileAssetPath(isHidden ? "back" : tile.code)} alt={tile.label} draggable={false} />
     </span>
   );
 }

@@ -136,6 +136,12 @@
   background: linear-gradient(135deg, rgba(150, 32, 26, 0.55), rgba(72, 14, 12, 0.72));
 }
 
+.home-card--friends {
+  background:
+    linear-gradient(135deg, rgba(36, 91, 91, 0.58), rgba(8, 35, 27, 0.72)),
+    repeating-linear-gradient(90deg, rgba(255, 247, 227, 0.03) 0 1px, transparent 1px 9px);
+}
+
 .home-card--link {
   background: linear-gradient(135deg, rgba(20, 93, 104, 0.54), rgba(8, 43, 48, 0.72));
 }
@@ -154,6 +160,14 @@
   transform: translateY(-3px);
   border-color: rgba(255, 216, 137, 0.72);
   box-shadow: 0 16px 34px rgba(0, 0, 0, 0.34);
+}
+
+.room-join-card {
+  cursor: default;
+}
+
+.room-join-card:hover {
+  transform: none;
 }
 
 .home-card__icon {
@@ -238,6 +252,234 @@
   font-size: 0.78rem;
 }
 
+.room-primary,
+.room-secondary,
+.room-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 34px;
+  border: 1px solid rgba(255, 247, 227, 0.18);
+  border-radius: 8px;
+  color: #fff4da;
+  background: rgba(255, 247, 227, 0.08);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.room-secondary:hover,
+.room-icon-button:hover {
+  border-color: rgba(255, 216, 137, 0.68);
+  background: rgba(215, 163, 72, 0.14);
+}
+
+.room-inline-form {
+  position: relative;
+  z-index: 1;
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 8px;
+  align-items: end;
+  margin-top: 2px;
+}
+
+.room-frame {
+  width: min(780px, 100%);
+}
+
+.room-panel {
+  display: grid;
+  gap: 14px;
+  max-width: 520px;
+  margin: 0 auto;
+  padding: clamp(14px, 2.4vw, 20px);
+  border: 1px solid rgba(255, 247, 227, 0.13);
+  border-radius: 8px;
+  background: rgba(4, 24, 18, 0.44);
+}
+
+.room-panel--lobby,
+.room-panel--waiting {
+  max-width: none;
+}
+
+.room-field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.room-field--inline span {
+  display: none;
+}
+
+.room-field span {
+  color: rgba(246, 239, 225, 0.68);
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.room-field input {
+  width: 100%;
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 247, 227, 0.16);
+  border-radius: 8px;
+  color: #fff4da;
+  background: rgba(0, 0, 0, 0.2);
+  font: inherit;
+  font-size: 1rem;
+  outline: none;
+}
+
+.room-field input:focus {
+  border-color: rgba(255, 216, 137, 0.72);
+  box-shadow: 0 0 0 3px rgba(215, 163, 72, 0.16);
+}
+
+.room-primary {
+  min-height: 42px;
+  border-color: rgba(215, 163, 72, 0.72);
+  color: #20160c;
+  background: linear-gradient(180deg, #ffd47c, #c9892e);
+}
+
+.room-secondary {
+  padding: 0 12px;
+}
+
+.room-icon-button {
+  width: 36px;
+  padding: 0;
+}
+
+.room-code-block {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 10px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid rgba(215, 163, 72, 0.28);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.room-code-block span,
+.room-code-block em {
+  color: rgba(246, 239, 225, 0.64);
+  font-size: 0.76rem;
+  font-style: normal;
+}
+
+.room-code-block strong {
+  color: #ffd889;
+  font-size: clamp(1.7rem, 5vw, 3rem);
+  letter-spacing: 0;
+}
+
+.room-seats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.room-seat {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid rgba(255, 247, 227, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 247, 227, 0.07);
+}
+
+.room-seat span,
+.room-seat em {
+  color: rgba(246, 239, 225, 0.58);
+  font-size: 0.7rem;
+  font-style: normal;
+}
+
+.room-seat strong {
+  overflow: hidden;
+  color: #fff4da;
+  font-size: 0.96rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.room-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.room-error {
+  margin: 0;
+  color: #ffd3c9;
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+.room-waiting-text {
+  margin: 0;
+  color: rgba(246, 239, 225, 0.76);
+  font-size: 0.9rem;
+}
+
+.room-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(0, 0, 0, 0.48);
+  backdrop-filter: blur(4px);
+}
+
+.room-create-modal {
+  display: grid;
+  gap: 16px;
+  width: min(430px, 100%);
+  padding: 18px;
+  border: 1px solid rgba(215, 163, 72, 0.36);
+  border-radius: 8px;
+  color: #f6efe1;
+  background:
+    linear-gradient(135deg, rgba(255, 247, 227, 0.08), transparent 30%),
+    radial-gradient(circle at 50% 25%, rgba(20, 82, 62, 0.94), rgba(8, 35, 27, 0.98) 72%);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.5);
+}
+
+.room-create-modal h2 {
+  margin: 0;
+  color: #fff4da;
+  font-size: 1.7rem;
+}
+
+.room-create-modal p {
+  margin: 7px 0 0;
+  color: rgba(246, 239, 225, 0.72);
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+.room-spin {
+  animation: room-spin 900ms linear infinite;
+}
+
+@keyframes room-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 @media (max-width: 640px) {
   .home-header {
     display: block;
@@ -261,6 +503,10 @@
   .home-card__badge {
     grid-column: 2;
     justify-self: start;
+  }
+
+  .room-seats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -403,6 +649,68 @@
   .home-footer {
     margin-top: 8px;
     font-size: 0.62rem;
+  }
+
+  .room-primary,
+  .room-secondary,
+  .room-icon-button {
+    min-height: 26px;
+    font-size: 0.66rem;
+  }
+
+  .room-inline-form {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 5px;
+  }
+
+  .room-panel {
+    gap: 8px;
+    padding: 9px;
+  }
+
+  .room-field input {
+    min-height: 30px;
+    font-size: 0.82rem;
+  }
+
+  .room-code-block {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    padding: 8px;
+  }
+
+  .room-code-block strong {
+    font-size: clamp(1.3rem, 4.4vw, 2rem);
+  }
+
+  .room-seats {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .room-seat {
+    padding: 7px;
+  }
+
+  .room-seat strong {
+    font-size: 0.76rem;
+  }
+
+  .room-waiting-text,
+  .room-error {
+    font-size: 0.66rem;
+  }
+
+  .room-create-modal {
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .room-create-modal h2 {
+    font-size: 1.22rem;
+  }
+
+  .room-create-modal p {
+    font-size: 0.7rem;
   }
 }
 
