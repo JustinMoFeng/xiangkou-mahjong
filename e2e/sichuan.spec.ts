@@ -12,6 +12,8 @@ type Tile = {
 };
 
 const SICHUAN_STORAGE_KEY = "xiangkou-sichuan-save-v1";
+const XIANGKOU_STORAGE_KEY = "xiangkou-mahjong-save-v1";
+const YANGYANG_STORAGE_KEY = "mahjong-yangyang-save-v1";
 
 function tile(code: TileCode, copy = 0): Tile {
   const suit = code[0] as SuitPrefix;
@@ -191,7 +193,35 @@ test("home page lets you pick a mode and routes by path", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "开始麻将羊羊消" }).click();
   await expect(page).toHaveURL(/\/play\/yangyang$/);
-  await expect(page.getByLabel("麻将羊羊消")).toBeVisible();
+  await expect(page.getByLabel("麻将羊羊消关卡选择")).toBeVisible();
+});
+
+test("mahjong table rounds survive a browser refresh", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => window.localStorage.clear());
+
+  await page.goto("/play/xiangkou/bot");
+  await expect(page.getByLabel("巷口麻将牌桌")).toBeVisible();
+  await page.getByTestId("drawn-tile").click();
+  await expect(page.getByLabel("你河牌").locator("img")).toHaveCount(1);
+  await page.reload();
+  await expect(page.getByLabel("巷口麻将牌桌")).toBeVisible();
+  await expect(page.getByLabel("你河牌").locator("img")).toHaveCount(1);
+  await expect
+    .poll(async () => page.evaluate((key) => JSON.parse(window.localStorage.getItem(key) ?? "{}")?.state?.players?.[0]?.discards?.length, XIANGKOU_STORAGE_KEY))
+    .toBe(1);
+
+  await page.evaluate(() => window.localStorage.clear());
+  await page.goto("/play/sichuan/bot");
+  await expect(page.getByLabel("定缺")).toBeVisible();
+  await page.getByTestId("sc-missing-s").click();
+  await expect(page.getByLabel("定缺")).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByLabel("川麻牌桌")).toBeVisible();
+  await expect(page.getByLabel("定缺")).toHaveCount(0);
+  await expect
+    .poll(async () => page.evaluate((key) => JSON.parse(window.localStorage.getItem(key) ?? "{}")?.state?.phase, SICHUAN_STORAGE_KEY))
+    .toBe("playing");
 });
 
 test("home and mode selection fit short mobile landscape browser viewports", async ({ page, browserName }) => {
@@ -314,9 +344,20 @@ test("casual games enter and support first interactions", async ({ page }) => {
   await page.getByLabel("返回关卡").click();
   await expect(page.getByLabel("麻将连连看关卡选择")).toBeVisible();
 
-  await page.goto("/play/yangyang?seed=23");
+  await page.goto("/play/yangyang");
+  await expect(page.getByLabel("麻将羊羊消关卡选择")).toBeVisible();
+  await expect(page.locator("[aria-label='羊羊消关卡']").getByRole("button")).toHaveCount(6);
+  await expect(page.getByRole("button", { name: /简单/ })).toContainText("随机堆型");
+  await expect(page.getByRole("button", { name: /中等/ })).toContainText("随机堆型");
+  await expect(page.getByRole("button", { name: /困难/ })).toContainText("随机堆型");
+  await expect(page.getByRole("button", { name: /噩梦/ })).toContainText("随机堆型");
+  await expect(page.getByRole("button", { name: /地狱/ })).toContainText("随机堆型");
+  await expect(page.getByRole("button", { name: /无尽模式/ })).toContainText("随机难度");
+
+  await page.getByRole("button", { name: /^中等/ }).click();
+  await expect(page).toHaveURL(/\/play\/yangyang\?level=normal$/);
   await expect(page.getByLabel("麻将羊羊消")).toBeVisible();
-  await expect(page.getByTestId("yang-tile")).toHaveCount(54);
+  await expect(page.getByTestId("yang-tile")).toHaveCount(45);
   const blockedTiles = page.locator('[data-testid="yang-tile"][data-blocked="true"]');
   await expect(blockedTiles.first()).toBeDisabled();
 
@@ -329,6 +370,61 @@ test("casual games enter and support first interactions", async ({ page }) => {
   await tripleTiles.nth(1).click();
   await tripleTiles.nth(2).click();
   await expect(page.locator(".yang-slot.is-filled")).toHaveCount(0);
+});
+
+test("yangyang current round survives a browser refresh", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => window.localStorage.clear());
+  await page.goto("/play/yangyang?level=easy-castle");
+  await expect(page.getByLabel("麻将羊羊消")).toBeVisible();
+
+  await page.locator('[data-testid="yang-tile"][data-blocked="false"]').first().click();
+  await expect(page.locator(".yang-slot.is-filled")).toHaveCount(1);
+  await expect(page.getByText("步数 1")).toBeVisible();
+  await page.reload();
+
+  await expect(page.getByLabel("麻将羊羊消")).toBeVisible();
+  await expect(page.locator(".yang-slot.is-filled")).toHaveCount(1);
+  await expect(page.getByText("步数 1")).toBeVisible();
+  await expect
+    .poll(async () => page.evaluate((key) => JSON.parse(window.localStorage.getItem(key) ?? "{}")?.state?.moves, YANGYANG_STORAGE_KEY))
+    .toBe(1);
+});
+
+test("yangyang twin towers keep same-layer tiles separate at rendered size", async ({ page }) => {
+  await page.goto("/play/yangyang?level=hell-twin-towers&seed=17");
+  await expect(page.getByLabel("麻将羊羊消")).toBeVisible();
+
+  const geometry = await page.evaluate(() => {
+    const tiles = Array.from(document.querySelectorAll<HTMLElement>('[data-testid="yang-tile"][data-zone="main"]')).map(
+      (element) => {
+        const bounds = element.getBoundingClientRect();
+        return {
+          layer: Number(element.style.getPropertyValue("--yang-layer")),
+          left: bounds.left,
+          top: bounds.top,
+          right: bounds.right,
+          bottom: bounds.bottom,
+          width: bounds.width,
+          height: bounds.height,
+        };
+      },
+    );
+    const overlapArea = (first: (typeof tiles)[number], second: (typeof tiles)[number]) =>
+      Math.max(0, Math.min(first.right, second.right) - Math.max(first.left, second.left)) *
+      Math.max(0, Math.min(first.bottom, second.bottom) - Math.max(first.top, second.top));
+    const sameLayerOverlaps = tiles.flatMap((tile, index) =>
+      tiles.slice(index + 1).filter((other) => other.layer === tile.layer && overlapArea(tile, other) > 0.5),
+    );
+
+    return {
+      sameLayerOverlapCount: sameLayerOverlaps.length,
+      aspectRatios: tiles.map((tile) => tile.height / tile.width),
+    };
+  });
+
+  expect(geometry.sameLayerOverlapCount).toBe(0);
+  expect(geometry.aspectRatios.every((ratio) => ratio > 1.3 && ratio < 1.35)).toBe(true);
 });
 
 test("link match records best time and advances through presets", async ({ page }) => {
@@ -422,7 +518,52 @@ test("casual games fit short mobile landscape browser viewports", async ({ page,
       ".link-game-frame",
       "[data-testid='link-board-viewport']",
     );
-    await assertCasualLayout(`${viewport.width}x${viewport.height} yang`, "/play/yangyang", ".yang-frame", ".yang-stack");
+    await assertCasualLayout(
+      `${viewport.width}x${viewport.height} yang levels`,
+      "/play/yangyang",
+      ".yang-level-select",
+      ".yang-level-grid",
+      ".yang-level-select__top",
+    );
+    await assertCasualLayout(`${viewport.width}x${viewport.height} yang`, "/play/yangyang?level=easy&seed=10", ".yang-frame", ".yang-stack");
+    const yangZones = await page.evaluate(() => {
+      const rect = (selector: string) => {
+        const element = document.querySelector(selector);
+        if (!element) throw new Error(`Missing ${selector}`);
+        const bounds = element.getBoundingClientRect();
+        return { left: bounds.left, top: bounds.top, right: bounds.right, bottom: bounds.bottom };
+      };
+      const overlap = (first: ReturnType<typeof rect>, second: ReturnType<typeof rect>) =>
+        Math.max(0, Math.min(first.right, second.right) - Math.max(first.left, second.left)) *
+        Math.max(0, Math.min(first.bottom, second.bottom) - Math.max(first.top, second.top));
+      const main = rect(".yang-pile--main");
+      const left = rect(".yang-pile--support-left");
+      const right = rect(".yang-pile--support-right");
+      const mainTiles = Array.from(document.querySelectorAll('[data-testid="yang-tile"][data-zone="main"]')).map((element) => {
+        const bounds = element.getBoundingClientRect();
+        return { left: bounds.left, top: bounds.top, right: bounds.right, bottom: bounds.bottom };
+      });
+      const tilesInsideMain = mainTiles.every(
+        (tile) =>
+          tile.left >= main.left - 1 &&
+          tile.top >= main.top - 1 &&
+          tile.right <= main.right + 1 &&
+          tile.bottom <= main.bottom + 1,
+      );
+
+      return {
+        mainLeft: overlap(main, left),
+        mainRight: overlap(main, right),
+        supports: overlap(left, right),
+        tilesInsideMain,
+      };
+    });
+    expect(yangZones, `${viewport.width}x${viewport.height} yang zones`).toEqual({
+      mainLeft: 0,
+      mainRight: 0,
+      supports: 0,
+      tilesInsideMain: true,
+    });
   }
 });
 

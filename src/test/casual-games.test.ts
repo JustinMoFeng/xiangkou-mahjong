@@ -13,19 +13,30 @@ import { createLinkLevelCells, getLinkLevelPreset, LINK_LEVEL_PRESETS } from "..
 import { LINK_TILE_CODES } from "../link-match/patterns";
 import {
   createYangGame,
+  createYangGameForLevel,
+  getYangOpeningClearPlan,
   createYangStateForTest,
   isYangTileBlocked,
   selectYangTile,
   undoYangMove,
   type YangTile,
 } from "../yangyang/engine";
+import { getYangLevelPreset, YANG_LEVEL_PRESETS } from "../yangyang/levels";
 
 function linkTile(id: string, code: CasualTileCode, row: number, col: number, removed = false): LinkTile {
   return { id, code, row, col, removed };
 }
 
-function yangTile(id: string, code: CasualTileCode, x: number, y: number, layer: number, removed = false): YangTile {
-  return { id, code, x, y, layer, removed };
+function yangTile(
+  id: string,
+  code: CasualTileCode,
+  x: number,
+  y: number,
+  layer: number,
+  removed = false,
+  zone: YangTile["zone"] = "main",
+): YangTile {
+  return { id, code, x, y, layer, zone, removed };
 }
 
 describe("mahjong link match rules", () => {
@@ -223,14 +234,59 @@ describe("mahjong link match rules", () => {
 });
 
 describe("mahjong yangyang rules", () => {
+  it("defines difficulty levels with growing tile counts and multiple stack templates", () => {
+    const standardLevels = YANG_LEVEL_PRESETS.filter((level) => !level.endless);
+    expect(standardLevels.map((level) => level.id)).toEqual(["easy", "normal", "hard", "nightmare", "hell"]);
+    expect(standardLevels.map((level) => level.difficulty)).toEqual(["简单", "中等", "困难", "噩梦", "地狱"]);
+    expect(standardLevels.map((level) => level.tileCount)).toEqual([36, 54, 72, 90, 108]);
+    expect(standardLevels.map((level) => level.maxLayer)).toEqual([2, 3, 4, 5, 6]);
+    expect(new Set(standardLevels.flatMap((level) => level.layoutKinds))).toEqual(
+      new Set(["castle", "pyramid", "twin-towers", "corridor"]),
+    );
+  });
+
   it("blocks a lower tile while an upper tile overlaps it, then unlocks it after removal", () => {
-    const lower = yangTile("low", "m1", 1, 1, 0);
-    const upper = yangTile("up", "m2", 1.2, 1.2, 1);
+    const lower = yangTile("low", "m1", 12, 12, 0);
+    const upper = yangTile("up", "m2", 15, 15, 1);
     const state = createYangStateForTest([lower, upper]);
 
     expect(isYangTileBlocked(state.tiles, "low")).toBe(true);
     const afterUpper = selectYangTile(state, "up", 10);
     expect(isYangTileBlocked(afterUpper.tiles, "low")).toBe(false);
+  });
+
+  it("keeps the central castle and bottom support piles independent", () => {
+    const main = yangTile("main", "m1", 0, 0, 0, false, "main");
+    const support = yangTile("support", "m2", 0, 0, 8, false, "support-left");
+    const state = createYangStateForTest([main, support]);
+
+    expect(isYangTileBlocked(state.tiles, "main")).toBe(false);
+    expect(isYangTileBlocked(state.tiles, "support")).toBe(false);
+  });
+
+  it("keeps same-layer preset tiles on separate full-tile slots", () => {
+    const state = createYangGame(7, 0);
+    const sameLayerPairs = state.tiles.flatMap((tile, index) =>
+      state.tiles
+        .slice(index + 1)
+        .filter((other) => other.zone === tile.zone && other.layer === tile.layer)
+        .map((other) => [tile, other] as const),
+    );
+
+    expect(sameLayerPairs.every(([first, second]) => Math.abs(first.x - second.x) >= 6 || Math.abs(first.y - second.y) >= 6)).toBe(true);
+  });
+
+  it("keeps the two folded bottom stacks below and separate from the center pile", () => {
+    const state = createYangGameForLevel(10, 0, getYangLevelPreset("easy"));
+    const centerTiles = state.tiles.filter((tile) => tile.zone === "main");
+    const leftSupportTiles = state.tiles.filter((tile) => tile.zone === "support-left");
+    const rightSupportTiles = state.tiles.filter((tile) => tile.zone === "support-right");
+
+    expect(["castle", "pyramid", "twin-towers", "corridor"]).toContain(state.layoutKind);
+    expect(centerTiles.length).toBeGreaterThan(0);
+    expect(leftSupportTiles.length).toBeGreaterThanOrEqual(6);
+    expect(Math.abs(rightSupportTiles.length - leftSupportTiles.length)).toBeLessThanOrEqual(1);
+    expect(centerTiles.every((tile) => tile.zone === "main")).toBe(true);
   });
 
   it("clears three matching slot tiles", () => {
@@ -284,14 +340,48 @@ describe("mahjong yangyang rules", () => {
     expect(after.slots).toHaveLength(0);
   });
 
-  it("creates a fixed first level with eighteen triples", () => {
+  it("creates the default simple level in complete triples", () => {
     const state = createYangGame(7, 0);
     const counts = new Map<CasualTileCode, number>();
     for (const tile of state.tiles) {
       counts.set(tile.code, (counts.get(tile.code) ?? 0) + 1);
     }
 
-    expect(state.tiles).toHaveLength(54);
-    expect([...counts.values()].sort()).toEqual(Array.from({ length: 18 }, () => 3));
+    expect(state.tiles).toHaveLength(27);
+    expect([...counts.values()].sort()).toEqual(Array.from({ length: 9 }, () => 3));
+  });
+
+  it("creates a first level with at least one complete winning branch", () => {
+    let state = createYangGameForLevel(7, 0, getYangLevelPreset("hell"));
+
+    for (const group of getYangOpeningClearPlan(getYangLevelPreset("hell"), 7)) {
+      expect(group.every((index) => !isYangTileBlocked(state.tiles, state.tiles[index].id))).toBe(true);
+      state = group.reduce((current, index) => selectYangTile(current, current.tiles[index].id, 10), state);
+    }
+
+    expect(state.status).toBe("won");
+    expect(state.slots).toHaveLength(0);
+    expect(state.tiles.every((tile) => tile.removed)).toBe(true);
+  });
+
+  it("keeps all difficulty presets solvable", () => {
+    for (const level of YANG_LEVEL_PRESETS.filter((preset) => !preset.endless)) {
+      let state = createYangGameForLevel(17, 0, level);
+      for (const group of getYangOpeningClearPlan(level, 17)) {
+        expect(group.every((index) => !isYangTileBlocked(state.tiles, state.tiles[index].id)), level.id).toBe(true);
+        state = group.reduce((current, index) => selectYangTile(current, current.tiles[index].id, 10), state);
+      }
+      expect(state.status, level.id).toBe("won");
+    }
+  });
+
+  it("randomizes internal layouts across seeds for the same difficulty", () => {
+    const layouts = new Set(
+      Array.from({ length: 8 }).map((_, index) =>
+        createYangGameForLevel(30 + index, 0, getYangLevelPreset("normal")).layoutKind,
+      ),
+    );
+
+    expect(layouts.size).toBeGreaterThan(1);
   });
 });

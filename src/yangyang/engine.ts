@@ -1,4 +1,12 @@
 import { shuffleWithSeed, type CasualTileCode } from "../casual/tiles";
+import {
+  createYangLayoutPoints,
+  getYangLevelPreset,
+  resolveYangLevel,
+  type YangLayoutKind,
+  type YangLevelPreset,
+  type YangZone,
+} from "./levels";
 
 export const YANG_SLOT_CAPACITY = 7;
 
@@ -8,6 +16,7 @@ export type YangTile = {
   x: number;
   y: number;
   layer: number;
+  zone: YangZone;
   removed: boolean;
 };
 
@@ -32,32 +41,16 @@ export type YangGameState = YangSnapshot & {
   seed: number;
   shuffleCount: number;
   history: YangSnapshot[];
+  levelId: string;
+  levelName: string;
+  difficulty: string;
+  layoutKind: YangLayoutKind;
+  tileCount: number;
+  maxLayer: number;
+  endless: boolean;
+  endlessRound: number;
+  clearPlan: number[][];
 };
-
-function rectPoints(startX: number, startY: number, columns: number, rows: number, layer: number): Array<{ x: number; y: number; layer: number }> {
-  return Array.from({ length: rows }).flatMap((_, row) =>
-    Array.from({ length: columns }).map((__, col) => ({
-      x: startX + col,
-      y: startY + row,
-      layer,
-    })),
-  );
-}
-
-const layoutPoints: Array<{ x: number; y: number; layer: number }> = [
-  ...rectPoints(2, 1, 4, 4, 0),
-  ...rectPoints(1.52, 1.42, 5, 3, 1),
-  ...rectPoints(2.08, 1.86, 4, 2, 2),
-  ...rectPoints(2.58, 2.28, 3, 2, 3),
-  ...rectPoints(3.08, 2.68, 2, 1, 4),
-  { x: 3.58, y: 2.92, layer: 5 },
-  { x: -0.3, y: 0.6, layer: 1 },
-  { x: -0.3, y: 1.65, layer: 1 },
-  { x: -0.3, y: 2.7, layer: 1 },
-  { x: 6.9, y: 0.6, layer: 1 },
-  { x: 6.9, y: 1.65, layer: 1 },
-  { x: 6.9, y: 2.7, layer: 1 },
-];
 
 const levelCodes: CasualTileCode[] = [
   "m1",
@@ -126,8 +119,11 @@ function snapshot(state: YangGameState): YangSnapshot {
 }
 
 function intersects(first: YangTile, second: YangTile): boolean {
-  const horizontal = Math.abs(first.x - second.x) < 0.92;
-  const vertical = Math.abs(first.y - second.y) < 0.92;
+  if (first.zone !== second.zone) {
+    return false;
+  }
+  const horizontal = Math.abs(first.x - second.x) < 6;
+  const vertical = Math.abs(first.y - second.y) < 6;
   return horizontal && vertical;
 }
 
@@ -142,6 +138,55 @@ export function isYangTileBlocked(tiles: readonly YangTile[], tileId: string): b
 
 export function getClickableYangTiles(tiles: readonly YangTile[]): YangTile[] {
   return tiles.filter((tile) => !tile.removed && !isYangTileBlocked(tiles, tile.id));
+}
+
+function buildYangClearPlan(points: Array<{ x: number; y: number; layer: number; zone: YangZone }>): number[][] {
+  const tiles: YangTile[] = points.map((point, index) => ({
+    id: String(index),
+    code: "m1",
+    x: point.x,
+    y: point.y,
+    layer: point.layer,
+    zone: point.zone,
+    removed: false,
+  }));
+  const groups: number[][] = [];
+
+  while (tiles.some((tile) => !tile.removed)) {
+    const clickable = getClickableYangTiles(tiles)
+      .map((tile) => Number(tile.id))
+      .sort((first, second) => points[second].layer - points[first].layer || first - second);
+    if (clickable.length < 3) {
+      throw new Error("Yangyang layout must expose at least three removable tiles at every clear step.");
+    }
+    const group = clickable.slice(0, 3);
+    groups.push(group);
+    for (const index of group) {
+      tiles[index] = { ...tiles[index], removed: true };
+    }
+  }
+
+  return groups;
+}
+
+function createSolvableCodes(seed: number, clearPlan: number[][], tileCount: number): CasualTileCode[] {
+  const uniqueCodes = Array.from(new Set(levelCodes));
+  const groupCodes = shuffleWithSeed(uniqueCodes, seed);
+  const codes = Array<CasualTileCode>(tileCount);
+
+  for (const [groupIndex, group] of clearPlan.entries()) {
+    const code = groupCodes[groupIndex % groupCodes.length];
+    for (const tileIndex of group) {
+      codes[tileIndex] = code;
+    }
+  }
+
+  return codes;
+}
+
+export function getYangOpeningClearPlan(level: YangLevelPreset = getYangLevelPreset(undefined), seed = 1, round = 1): number[][] {
+  const resolved = resolveYangLevel(level, seed, round);
+  return buildYangClearPlan(createYangLayoutPoints(resolved)).map((group) => [...group]);
 }
 
 function clearTriples(slots: readonly YangSlotTile[]): YangSlotTile[] {
@@ -169,14 +214,27 @@ function nextStatus(tiles: readonly YangTile[], slots: readonly YangSlotTile[]):
 }
 
 export function createYangGame(seed = Date.now(), startedAt = Date.now()): YangGameState {
-  const shuffledCodes = shuffleWithSeed(levelCodes, seed);
+  return createYangGameForLevel(seed, startedAt, getYangLevelPreset(undefined));
+}
+
+export function createYangGameForLevel(
+  seed = Date.now(),
+  startedAt = Date.now(),
+  level: YangLevelPreset = getYangLevelPreset(undefined),
+  endlessRound = 1,
+): YangGameState {
+  const resolvedLevel = resolveYangLevel(level, seed, endlessRound);
+  const layoutPoints = createYangLayoutPoints(resolvedLevel);
+  const clearPlan = buildYangClearPlan(layoutPoints);
+  const solvableCodes = createSolvableCodes(seed, clearPlan, layoutPoints.length);
   return {
     tiles: layoutPoints.map((point, index) => ({
       id: `yang-${index}-${point.layer}`,
-      code: shuffledCodes[index],
+      code: solvableCodes[index],
       x: point.x,
       y: point.y,
       layer: point.layer,
+      zone: point.zone,
       removed: false,
     })),
     slots: [],
@@ -187,6 +245,15 @@ export function createYangGame(seed = Date.now(), startedAt = Date.now()): YangG
     seed,
     shuffleCount: 0,
     history: [],
+    levelId: level.id,
+    levelName: resolvedLevel.name,
+    difficulty: resolvedLevel.difficulty,
+    layoutKind: resolvedLevel.layoutKind,
+    tileCount: layoutPoints.length,
+    maxLayer: resolvedLevel.maxLayer,
+    endless: Boolean(level.endless),
+    endlessRound,
+    clearPlan,
   };
 }
 
@@ -294,17 +361,26 @@ export function createYangStateForTest(tiles: YangTile[], slots: YangSlotTile[] 
     seed: 1,
     shuffleCount: 0,
     history: [],
+    levelId: "test",
+    levelName: "测试局",
+    difficulty: "简单",
+    layoutKind: "pyramid",
+    tileCount: tiles.length,
+    maxLayer: Math.max(0, ...tiles.map((tile) => tile.layer)),
+    endless: false,
+    endlessRound: 1,
+    clearPlan: [],
   };
 }
 
 export function createYangTripleScenario(startedAt = Date.now()): YangGameState {
   return {
     ...createYangStateForTest([
-      yangScenarioTile("triple-a", "m1", 0.6, 0.8, 0),
-      yangScenarioTile("triple-b", "m1", 1.8, 0.8, 0),
-      yangScenarioTile("triple-c", "m1", 3.0, 0.8, 0),
-      yangScenarioTile("blocked-low", "p1", 2.0, 2.2, 0),
-      yangScenarioTile("blocking-up", "p2", 2.1, 2.25, 1),
+      yangScenarioTile("triple-a", "m1", 6, 3, 0),
+      yangScenarioTile("triple-b", "m1", 12, 3, 0),
+      yangScenarioTile("triple-c", "m1", 18, 3, 0),
+      yangScenarioTile("blocked-low", "p1", 12, 12, 0),
+      yangScenarioTile("blocking-up", "p2", 15, 15, 1),
     ]),
     startedAt,
   };
@@ -323,6 +399,7 @@ function yangScenarioTile(
     x,
     y,
     layer,
+    zone: "main",
     removed: false,
   };
 }
