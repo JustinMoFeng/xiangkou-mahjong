@@ -63,6 +63,16 @@ function App({ onBackHome }: { onBackHome?: () => void } = {}) {
   }, [scenario, state]);
 
   useEffect(() => {
+    if (scenario) {
+      return undefined;
+    }
+
+    const saveBeforeUnload = () => saveGame(state);
+    window.addEventListener("pagehide", saveBeforeUnload);
+    return () => window.removeEventListener("pagehide", saveBeforeUnload);
+  }, [scenario, state]);
+
+  useEffect(() => {
     if (isSettingsOpen || state.phase !== "playing" || state.pendingClaim || currentPlayer.type !== "bot") {
       return;
     }
