@@ -103,6 +103,11 @@ export function OnlineCreateRoom<TState extends OnlineSnapshotState, TAction ext
   const pendingActionPeerRef = useRef<Map<string, string>>(new Map());
   const hostPeerId = roomInfo?.peerId ?? roomInfo?.hostPeerId;
 
+  function updateGuests(nextGuests: RoomGuest[]) {
+    guestsRef.current = nextGuests;
+    setGuests(nextGuests);
+  }
+
   useEffect(() => {
     hostStateRef.current = hostState;
   }, [hostState]);
@@ -120,7 +125,7 @@ export function OnlineCreateRoom<TState extends OnlineSnapshotState, TAction ext
     try {
       const created = await client.createRoom(name);
       setRoomInfo(created);
-      setGuests([]);
+      updateGuests([]);
       setStatus("waiting");
     } catch (cause) {
       setStatus("error");
@@ -140,7 +145,7 @@ export function OnlineCreateRoom<TState extends OnlineSnapshotState, TAction ext
       try {
         const latest = await client.getRoom(activeRoomCode);
         if (stopped) return;
-        setGuests(roomGuests(latest));
+        updateGuests(roomGuests(latest));
       } catch (cause) {
         if (!stopped) {
           setError(cause instanceof Error ? cause.message : "刷新房间失败");
@@ -244,9 +249,13 @@ export function OnlineCreateRoom<TState extends OnlineSnapshotState, TAction ext
   function sendSeatAssigned(peerId: string) {
     const record = guestsRef.current.find((guest) => guest.peerId === peerId);
     if (!record) return;
-    sendMessageToPeer(peerId, {
+    sendSeatAssignedToGuest(record);
+  }
+
+  function sendSeatAssignedToGuest(record: RoomGuest) {
+    sendMessageToPeer(record.peerId, {
       type: "seatAssigned",
-      peerId,
+      peerId: record.peerId,
       seat: record.seat,
       nickname: record.nickname,
     });
@@ -255,7 +264,11 @@ export function OnlineCreateRoom<TState extends OnlineSnapshotState, TAction ext
   function sendSnapshotToPeer(peerId: string, state: TState | undefined) {
     const record = guestsRef.current.find((guest) => guest.peerId === peerId);
     if (!record || !state) return;
-    sendMessageToPeer(peerId, {
+    sendSnapshotToGuest(record, state);
+  }
+
+  function sendSnapshotToGuest(record: RoomGuest, state: TState) {
+    sendMessageToPeer(record.peerId, {
       type: "stateSnapshot",
       roomCode: roomInfo?.roomCode ?? "",
       turn: getStateTurn(state),
@@ -302,9 +315,9 @@ export function OnlineCreateRoom<TState extends OnlineSnapshotState, TAction ext
     setHostState(next);
     setStatus("playing");
 
-    for (const guest of guests) {
-      sendSeatAssigned(guest.peerId);
-      sendSnapshotToPeer(guest.peerId, next);
+    for (const guest of guestsRef.current.length > guests.length ? guestsRef.current : guests) {
+      sendSeatAssignedToGuest(guest);
+      sendSnapshotToGuest(guest, next);
     }
   }
 
