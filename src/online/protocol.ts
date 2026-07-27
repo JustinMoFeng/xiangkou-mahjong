@@ -51,6 +51,7 @@ export type OnlineMessage =
       state: GameState | SichuanGameState;
       roomCode: string;
       turn: number;
+      revision?: number;
     }
   | {
       type: "playerAction";
