@@ -1,4 +1,4 @@
-import type { GameState, Seat } from "../game/types";
+import type { GameState, Seat, TileCode } from "../game/types";
 import type { GameState as SichuanGameState } from "../sichuan/types";
 import type { SichuanPlayerAction } from "./sichuanActions";
 
@@ -27,6 +27,11 @@ export type PlayerAction =
   | {
       type: "selfDraw";
       seat: Seat;
+    }
+  | {
+      type: "kong";
+      seat: Seat;
+      code: TileCode;
     }
   | {
       type: "arrangeHand";

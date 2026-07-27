@@ -2,6 +2,7 @@ import { AlignJustify, Bot, Copy, Home as HomeIcon, House, Play, RotateCcw, Sett
 import { useEffect, useRef, useState } from "react";
 import {
   arrangeHand,
+  canSeatAddedKong,
   canSeatSelfWin,
   claimMeld,
   claimSelfDraw,
@@ -13,6 +14,7 @@ import {
   createNextRound,
   createRiverLayoutScenario,
   DEFAULT_PLAYER_NAMES,
+  declareAddedKong,
   normalizePlayerNames,
   discardTile,
   drawForCurrentSeat,
@@ -92,6 +94,7 @@ function App({ onBackHome, online }: { onBackHome?: () => void; online?: OnlineT
   const localSeat = online?.seat ?? 0;
   const human = state.players[localSeat];
   const localCanSelfWin = canSeatSelfWin(state, localSeat);
+  const addedKongCodes = canSeatAddedKong(state, localSeat);
   const humanPendingClaim = state.pendingClaim?.seat === localSeat ? state.pendingClaim : undefined;
   const currentPlayer = state.players[state.currentSeat];
   const canOperateLocally = !isOnline || online?.role === "host";
@@ -309,6 +312,14 @@ function App({ onBackHome, online }: { onBackHome?: () => void; online?: OnlineT
     dispatchLocalAction({ type: "selfDraw", seat: localSeat });
   }
 
+  function onKong() {
+    const code = addedKongCodes[0];
+    if (!code) {
+      return;
+    }
+    dispatchLocalAction({ type: "kong", seat: localSeat, code });
+  }
+
   function dispatchLocalAction(action: PlayerAction) {
     if (!canOperateLocally) {
       online?.onPlayerAction?.(action);
@@ -329,6 +340,8 @@ function App({ onBackHome, online }: { onBackHome?: () => void; online?: OnlineT
           return passClaim(current, action.seat);
         case "selfDraw":
           return claimSelfDraw(current, action.seat);
+        case "kong":
+          return declareAddedKong(current, action.seat, action.code);
       }
     });
   }
@@ -438,7 +451,7 @@ function App({ onBackHome, online }: { onBackHome?: () => void; online?: OnlineT
                 <button className="secondary-command" disabled>
                   碰
                 </button>
-                <button className="secondary-command" disabled>
+                <button className="secondary-command" disabled={addedKongCodes.length === 0} onClick={onKong}>
                   杠
                 </button>
               </>

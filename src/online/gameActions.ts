@@ -1,9 +1,11 @@
 import {
   arrangeHand,
+  canSeatAddedKong,
   canSeatSelfWin,
   claimMeld,
   claimSelfDraw,
   claimWin,
+  declareAddedKong,
   discardTile,
   passClaim,
 } from "../game/engine";
@@ -74,6 +76,12 @@ function validateActionAccess(state: GameState, action: PlayerAction): { ok: tru
     return { ok: true };
   }
 
+  if (action.type === "kong") {
+    return canSeatAddedKong(state, action.seat).includes(action.code)
+      ? { ok: true }
+      : { ok: false, reason: "当前不能补杠这张牌" };
+  }
+
   if (!state.pendingClaim || state.pendingClaim.seat !== action.seat) {
     return { ok: false, reason: "当前没有这个座位的响应操作" };
   }
@@ -108,6 +116,8 @@ function reducePlayerAction(state: GameState, action: PlayerAction): GameState {
       return passClaim(state, action.seat);
     case "selfDraw":
       return claimSelfDraw(state, action.seat);
+    case "kong":
+      return declareAddedKong(state, action.seat, action.code);
     case "arrangeHand":
       return arrangeHand(state, action.seat);
   }
