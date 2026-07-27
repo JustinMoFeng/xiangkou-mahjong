@@ -2,8 +2,16 @@ import { useEffect, useState } from "react";
 import App from "./App";
 import Home, { SichuanModeSelect, XiangkouModeSelect, type GameMode } from "./Home";
 import LinkMatchApp from "./link-match/LinkMatchApp";
-import { SichuanCreateRoom, SichuanJoinRoom } from "./online/SichuanRoom";
-import { XiangkouCreateRoom, XiangkouJoinRoom } from "./online/XiangkouRoom";
+import {
+  SichuanCreateRoom as SichuanEdgeCreateRoom,
+  SichuanJoinRoom as SichuanEdgeJoinRoom,
+} from "./online/SichuanRoom";
+import { SichuanCloudCreateRoom, SichuanCloudJoinRoom } from "./online/SichuanRoomCloud";
+import {
+  XiangkouCreateRoom as XiangkouEdgeCreateRoom,
+  XiangkouJoinRoom as XiangkouEdgeJoinRoom,
+} from "./online/XiangkouRoom";
+import { XiangkouCloudCreateRoom, XiangkouCloudJoinRoom } from "./online/XiangkouRoomCloud";
 import SichuanApp from "./sichuan/SichuanApp";
 import YangYangApp from "./yangyang/YangYangApp";
 import "./sichuan/sichuan.css";
@@ -23,6 +31,16 @@ type View =
   | "yangyang";
 
 const BASE_PATH = new URL(import.meta.env.BASE_URL, window.location.origin).pathname.replace(/\/+$/, "");
+
+// PoC switch: when VITE_ONLINE_BACKEND=cloudflare, Xiangkou friend rooms use the
+// server-authoritative Cloudflare (Durable Objects) path. EdgeOne P2P stays the
+// default so the existing deploy is untouched.
+const ONLINE_BACKEND = (import.meta.env.VITE_ONLINE_BACKEND as string | undefined) ?? "edgeone";
+const USE_CLOUD = ONLINE_BACKEND === "cloudflare";
+const XiangkouCreateRoom = USE_CLOUD ? XiangkouCloudCreateRoom : XiangkouEdgeCreateRoom;
+const XiangkouJoinRoom = USE_CLOUD ? XiangkouCloudJoinRoom : XiangkouEdgeJoinRoom;
+const SichuanCreateRoom = USE_CLOUD ? SichuanCloudCreateRoom : SichuanEdgeCreateRoom;
+const SichuanJoinRoom = USE_CLOUD ? SichuanCloudJoinRoom : SichuanEdgeJoinRoom;
 
 function normalizePath(pathname: string): string {
   const trimmed = pathname.replace(/\/+$/, "");

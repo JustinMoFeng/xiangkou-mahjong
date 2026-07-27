@@ -10,7 +10,10 @@
     "generate:tiles": "node scripts/generate-tiles.mjs",
     "preview": "vite preview --host 0.0.0.0",
     "test": "vitest run src/test",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "typecheck:worker": "tsc -p tsconfig.worker.json",
+    "cf:dev": "npm run build && wrangler dev --port 8788 --local",
+    "cf:deploy": "npm run build && wrangler deploy"
   },
   "dependencies": {
     "@edgeone/pages-blob": "^0.0.13",
@@ -22,10 +25,12 @@
     "vite": "^6.0.1"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260726.1",
     "@playwright/test": "^1.61.1",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "typescript": "^5.6.3",
-    "vitest": "^2.1.5"
+    "vitest": "^2.1.5",
+    "wrangler": "^4.114.0"
   }
 }

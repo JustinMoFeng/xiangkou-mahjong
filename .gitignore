@@ -12,3 +12,7 @@ playwright-report
 .edgeone/*
 .tef_dist/*
 edgeone-output
+
+# Cloudflare Workers / wrangler
+.wrangler
+.dev.vars

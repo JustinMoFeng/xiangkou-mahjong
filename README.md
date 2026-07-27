@@ -32,6 +32,17 @@
 - 加入者只发送操作意图，房主校验合法性后广播完整状态快照；非本人手牌和牌山会在快照中隐藏。
 - 部署时需要给 EdgeOne Functions 绑定 KV，推荐变量名 `ROOMS_KV`。
 
+## 巷口麻将朋友房间 · Cloudflare 方案（实验分支）
+
+`feature/cloudflare-online` 分支提供一套**服务端权威**的联机实现，覆盖巷口麻将与川麻两种玩法，作为 EdgeOne P2P 方案的替代（EdgeOne 相关代码保持不动）。
+
+- 一个房间对应一个 Cloudflare **Durable Object**（`worker/GameRoom.ts`），DO 单实例强一致地持有完整游戏状态，直接复用现有引擎与 `applyHostPlayerAction` / `maskStateForSeat`（川麻为 `applySichuanHostPlayerAction` / `maskSichuanStateForSeat`）。
+- `GameRoom` 通过 `worker/adapters.ts` 的 `GameAdapter` 按房间种别（`kind=xiangkou|sichuan`）切换引擎、动作校验、遮牌和机器人循环；建房时用 `POST /api/rooms?kind=sichuan` 指定玩法。
+- 所有玩家通过 **WebSocket** 连接同一个 DO，只发送操作、只接收按座位遮牌后的快照；**没有房主浏览器、没有 P2P**，任何人掉线都能用同一 `clientId` 重连回原座位与最新牌局。
+- 机器人回合与自动摸牌由 DO 内的 `setTimeout` 驱动（`src/online/autoplay.ts` 抽出的纯函数，川麻额外处理定缺阶段与已胡玩家跳过），节奏与本地一致。
+- 本地开发：`npm run cf:dev`（构建后用 `wrangler dev` 起 DO）；部署：`npm run cf:deploy`。前端用 `VITE_ONLINE_BACKEND=cloudflare` 把巷口与川麻的朋友房间入口切换到云端，默认仍走 EdgeOne。
+- 注意：Cloudflare 在中国大陆的连通性弱于 EdgeOne，是否切换需结合用户地域权衡。
+
 ## 规则（川麻·血战到底）
 
 - 使用 108 张牌：只有万、筒、条，没有字牌。
