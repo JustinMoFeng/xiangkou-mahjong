@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { arrangeHand, createNewGame, createNextRound, discardTile, drawForCurrentSeat, getClaimOptionsForSeat } from "../game/engine";
+import {
+  arrangeHand,
+  canSeatAddedKong,
+  createNewGame,
+  createNextRound,
+  declareAddedKong,
+  discardTile,
+  drawForCurrentSeat,
+  getClaimOptionsForSeat,
+} from "../game/engine";
 import { checkStandardWin, scoreWinningHand } from "../game/rules";
 import { createWall } from "../game/tiles";
 import type { Tile, TileCode } from "../game/types";
@@ -161,6 +170,28 @@ describe("mahjong rules", () => {
     expect(next.players[1].melds[0]?.kind).toBe("kong");
     expect(next.players[1].melds[0]?.tiles).toHaveLength(4);
     expect(next.players[1].hand.filter((tile) => tile.code === "red")).toHaveLength(0);
+  });
+
+  it("upgrades a pong to an added kong and draws a replacement tile", () => {
+    const state = createNewGame(39);
+    const [red0, red1, red2, red3] = tiles(["red", "red", "red", "red"]);
+    state.currentSeat = 0;
+    state.players[0].melds = [{ kind: "pong", tiles: [red0, red1, red2], from: 1, calledTile: red0 }];
+    state.players[0].hand = [red3, ...tiles(["m1", "m2", "m3", "p1", "p2", "p3", "s1", "s2", "s3", "m7"])];
+    state.players[0].drawnTileId = red3.id;
+    const wallBefore = state.wall.length;
+
+    expect(canSeatAddedKong(state, 0)).toEqual(["red"]);
+
+    const next = declareAddedKong(state, 0, "red");
+
+    expect(next.currentSeat).toBe(0);
+    expect(next.players[0].melds[0]).toMatchObject({ kind: "kong" });
+    expect(next.players[0].melds[0].tiles).toHaveLength(4);
+    expect(next.players[0].hand.some((tile) => tile.id === red3.id)).toBe(false);
+    expect(next.players[0].drawnTileId).toBeDefined();
+    expect(next.wall).toHaveLength(wallBefore - 1);
+    expect(next.recentAction).toContain("补杠");
   });
 
   it("prioritizes a bot win over a human chow option", () => {

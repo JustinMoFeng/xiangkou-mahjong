@@ -439,6 +439,14 @@ export function canSeatSelfWin(state: GameState, seat: Seat): boolean {
   return player.hand.length % 3 === 2 && checkStandardWin(player.hand).canWin;
 }
 
+export function canSeatAddedKong(state: GameState, seat: Seat): TileCode[] {
+  if (state.phase !== "playing" || state.pendingClaim || state.currentSeat !== seat) {
+    return [];
+  }
+
+  return addedKongCodes(state.players[seat]);
+}
+
 export function claimSelfDraw(state: GameState, seat: Seat = HUMAN_SEAT): GameState {
   if (!canSeatSelfWin(state, seat)) {
     return state;
@@ -458,6 +466,50 @@ export function claimSelfDraw(state: GameState, seat: Seat = HUMAN_SEAT): GameSt
     kind: "self-draw",
     pattern: check.pattern,
   });
+}
+
+export function declareAddedKong(state: GameState, seat: Seat, code: TileCode): GameState {
+  if (state.phase !== "playing" || state.pendingClaim || state.currentSeat !== seat) {
+    return state;
+  }
+
+  const player = state.players[seat];
+  const pong = player.melds.find((meld) => meld.kind === "pong" && meld.calledTile.code === code);
+  const handTile = player.hand.find((tile) => tile.code === code);
+
+  if (!pong || !handTile) {
+    return state;
+  }
+
+  const next = cloneGameState(state);
+  const nextPlayer = next.players[seat];
+  const nextMeld = nextPlayer.melds.find((meld) => meld.kind === "pong" && meld.calledTile.code === code);
+  const tileIndex = nextPlayer.hand.findIndex((tile) => tile.id === handTile.id);
+
+  if (!nextMeld || tileIndex < 0) {
+    return state;
+  }
+
+  const [moved] = nextPlayer.hand.splice(tileIndex, 1);
+  nextMeld.kind = "kong";
+  nextMeld.tiles = sortTiles([...nextMeld.tiles, moved]);
+  nextPlayer.drawnTileId = undefined;
+  nextPlayer.hand = sortTiles(nextPlayer.hand);
+  next.recentAction = `${nextPlayer.name}补杠 ${moved.label}`;
+  next.logs = addLog(next.logs, next.recentAction);
+
+  if (next.wall.length === 0) {
+    next.phase = "finished";
+    next.recentAction = "牌山摸完，本局流局。";
+    next.logs = addLog(next.logs, next.recentAction);
+    return next;
+  }
+
+  const replacement = drawTile(next.wall);
+  nextPlayer.drawnTileId = replacement.id;
+  nextPlayer.hand = sortHandWithDrawnTile([...nextPlayer.hand, replacement], nextPlayer.drawnTileId);
+  next.turn += 1;
+  return next;
 }
 
 function resolveDiscard(state: GameState, from: Seat, tile: Tile): GameState {
@@ -691,6 +743,13 @@ function nextSeat(seat: Seat): Seat {
 
 function orderedSeatsAfter(seat: Seat): Seat[] {
   return [nextSeat(seat), nextSeat(nextSeat(seat)), nextSeat(nextSeat(nextSeat(seat)))];
+}
+
+function addedKongCodes(player: Player): TileCode[] {
+  return player.melds
+    .filter((meld) => meld.kind === "pong")
+    .map((meld) => meld.calledTile.code)
+    .filter((code, index, codes) => codes.indexOf(code) === index && player.hand.some((tile) => tile.code === code));
 }
 
 export function getClaimOptionsForSeat(state: GameState, seat: Seat, from: Seat, tile: Tile): ClaimOption[] {

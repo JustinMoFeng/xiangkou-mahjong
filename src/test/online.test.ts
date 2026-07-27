@@ -77,6 +77,25 @@ describe("online host action handling", () => {
     expect(result.ok).toBe(true);
     expect(result.state.players[1].melds[0]?.kind).toBe("pong");
   });
+
+  it("accepts a remote added-kong action after that seat has ponged", () => {
+    const state = onlineState();
+    const [red0, red1, red2, red3] = tiles(["red", "red", "red", "red"]);
+    state.currentSeat = 1;
+    state.players[1].melds = [{ kind: "pong", tiles: [red0, red1, red2], from: 0, calledTile: red0 }];
+    state.players[1].hand = [red3, ...tiles(["m1", "m2", "m3", "p1", "p2", "p3", "s1", "s2", "s3", "m7"])];
+    state.players[1].drawnTileId = red3.id;
+    const wallBefore = state.wall.length;
+
+    const result = applyHostPlayerAction(state, { type: "kong", seat: 1, code: "red" });
+
+    expect(result.ok).toBe(true);
+    expect(result.state.players[1].melds[0]).toMatchObject({ kind: "kong" });
+    expect(result.state.players[1].melds[0].tiles).toHaveLength(4);
+    expect(result.state.players[1].hand.some((tile) => tile.id === red3.id)).toBe(false);
+    expect(result.state.players[1].drawnTileId).toBeDefined();
+    expect(result.state.wall).toHaveLength(wallBefore - 1);
+  });
 });
 
 describe("online snapshot rules", () => {
