@@ -1,3 +1,5 @@
+import type { OnlineMessage } from "./protocol";
+
 export type RoomInfo = {
   roomCode: string;
   hostToken?: string;
@@ -16,29 +18,26 @@ export type RoomInfo = {
   expiresAt: number;
 };
 
-export type SignalPayload = RTCSessionDescriptionInit | RTCIceCandidateInit;
-
-export type SignalEnvelope<T = SignalPayload> = {
+export type RoomEventEnvelope = {
   id: string;
   roomCode: string;
   peerId: string;
-  targetPeerId?: string;
-  type: "offer" | "answer" | "ice";
-  payload: T;
+  targetPeerId: string;
+  message: OnlineMessage;
   createdAt: number;
 };
 
-export class SignalingError extends Error {
+export class RelayError extends Error {
   constructor(
     message: string,
     public readonly status: number,
   ) {
     super(message);
-    this.name = "SignalingError";
+    this.name = "RelayError";
   }
 }
 
-export class RoomSignalingClient {
+export class RoomRelayClient {
   constructor(private readonly baseUrl = "/api/rooms") {}
 
   async createRoom(nickname: string): Promise<RoomInfo> {
@@ -59,49 +58,22 @@ export class RoomSignalingClient {
     });
   }
 
-  async postOffer(
-    roomCode: string,
-    hostToken: string,
-    offer: RTCSessionDescriptionInit,
-    peerId: string,
-    targetPeerId: string,
-  ): Promise<void> {
-    await this.request(`/${normalizeRoomCode(roomCode)}/offer`, {
-      method: "POST",
-      body: JSON.stringify({ hostToken, offer, peerId, targetPeerId }),
-    });
-  }
-
-  async postAnswer(
-    roomCode: string,
-    guestToken: string,
-    seat: number,
-    answer: RTCSessionDescriptionInit,
-    peerId: string,
-    targetPeerId: string,
-  ): Promise<void> {
-    await this.request(`/${normalizeRoomCode(roomCode)}/answer`, {
-      method: "POST",
-      body: JSON.stringify({ guestToken, seat, answer, peerId, targetPeerId }),
-    });
-  }
-
-  async postIce(
+  async postEvent(
     roomCode: string,
     token: string,
     peerId: string,
-    candidates: RTCIceCandidateInit[],
-    targetPeerId?: string,
+    targetPeerId: string,
+    message: OnlineMessage,
   ): Promise<void> {
-    await this.request(`/${normalizeRoomCode(roomCode)}/ice`, {
+    await this.request(`/${normalizeRoomCode(roomCode)}/events`, {
       method: "POST",
-      body: JSON.stringify({ token, peerId, candidates, targetPeerId }),
+      body: JSON.stringify({ token, peerId, targetPeerId, message }),
     });
   }
 
-  async getSignals(roomCode: string, peerId: string): Promise<Array<SignalEnvelope>> {
+  async getEvents(roomCode: string, peerId: string): Promise<Array<RoomEventEnvelope>> {
     const params = new URLSearchParams({ peerId });
-    return this.request<Array<SignalEnvelope>>(`/${normalizeRoomCode(roomCode)}/signals?${params.toString()}`);
+    return this.request<Array<RoomEventEnvelope>>(`/${normalizeRoomCode(roomCode)}/events?${params.toString()}`);
   }
 
   private async request<T = unknown>(path: string, init?: RequestInit): Promise<T> {
@@ -117,7 +89,7 @@ export class RoomSignalingClient {
     const payload = text ? (JSON.parse(text) as { error?: string } & T) : (undefined as T);
 
     if (!response.ok) {
-      throw new SignalingError((payload as { error?: string } | undefined)?.error ?? "房间信令请求失败", response.status);
+      throw new RelayError((payload as { error?: string } | undefined)?.error ?? "房间同步请求失败", response.status);
     }
 
     return payload as T;
@@ -128,6 +100,3 @@ export function normalizeRoomCode(value: string): string {
   return value.trim().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
 }
 
-export function createPeerId(prefix = "peer"): string {
-  return `${prefix}-${Math.random().toString(36).slice(2, 10)}-${Date.now().toString(36)}`;
-}

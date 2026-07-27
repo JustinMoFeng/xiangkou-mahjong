@@ -16,14 +16,13 @@ type LocalGuest = {
   joinedAt: number;
 };
 
-type LocalSignal = {
+type LocalEvent = {
   id: string;
   roomCode: string;
   createdAt: number;
-  type: "offer" | "answer" | "ice";
   peerId: string;
-  targetPeerId?: string;
-  payload: unknown;
+  targetPeerId: string;
+  message: unknown;
 };
 
 type LocalRoom = {
@@ -39,7 +38,7 @@ type LocalRoom = {
 
 function localRoomsApi() {
   const rooms = new Map<string, LocalRoom>();
-  const signals = new Map<string, LocalSignal[]>();
+  const events = new Map<string, LocalEvent[]>();
 
   function sendJson(res: { statusCode?: number; setHeader: (name: string, value: string) => void; end: (data: string) => void }, data: unknown, status = 200) {
     res.statusCode = status;
@@ -93,20 +92,29 @@ function localRoomsApi() {
     return room;
   }
 
-  function signalKey(roomCode: string, peerId: string) {
+  function eventKey(roomCode: string, peerId: string) {
     return `${roomCode}:${peerId}`;
   }
 
-  function appendSignal(roomCode: string, targetPeerId: string, signal: Omit<LocalSignal, "id" | "roomCode" | "createdAt">) {
-    const key = signalKey(roomCode, targetPeerId);
-    const next = signals.get(key) ?? [];
+  function appendEvent(roomCode: string, targetPeerId: string, event: Omit<LocalEvent, "id" | "roomCode" | "createdAt">) {
+    const key = eventKey(roomCode, targetPeerId);
+    const next = events.get(key) ?? [];
     next.push({
-      id: token("sig"),
+      id: token("evt"),
       roomCode,
       createdAt: Date.now(),
-      ...signal,
+      ...event,
     });
-    signals.set(key, next.slice(-80));
+    events.set(key, next.slice(-80));
+  }
+
+  function isKnownPeer(room: LocalRoom, peerId: string) {
+    return peerId === room.hostPeerId || room.guests.some((guest) => guest.peerId === peerId);
+  }
+
+  function peerForToken(room: LocalRoom, tokenValue: unknown) {
+    if (room.hostToken === tokenValue) return room.hostPeerId;
+    return room.guests.find((guest) => guest.guestToken === tokenValue)?.peerId;
   }
 
   function splitRequestUrl(rawUrl: string | undefined) {
@@ -192,67 +200,44 @@ function localRoomsApi() {
         const action = parts[1];
         const body = method === "POST" ? await readBody(req) : {};
 
-        if (action === "offer" && method === "POST") {
-          if (body.hostToken !== room.hostToken || !body.offer || !body.peerId || !body.targetPeerId) {
-            sendJson(res, { error: "offer 信令无效" }, 400);
-            return;
-          }
-          appendSignal(roomCode, String(body.targetPeerId), {
-            type: "offer",
-            peerId: String(body.peerId),
-            targetPeerId: String(body.targetPeerId),
-            payload: body.offer,
-          });
-          sendJson(res, { ok: true });
-          return;
-        }
-
-        if (action === "answer" && method === "POST") {
-          const guest = room.guests.find((item) => item.guestToken === body.guestToken && item.seat === body.seat);
-          if (!guest || !body.answer || !body.peerId || !body.targetPeerId) {
-            sendJson(res, { error: "answer 信令无效" }, 400);
-            return;
-          }
-          appendSignal(roomCode, String(body.targetPeerId), {
-            type: "answer",
-            peerId: String(body.peerId),
-            targetPeerId: String(body.targetPeerId),
-            payload: body.answer,
-          });
-          sendJson(res, { ok: true });
-          return;
-        }
-
-        if (action === "ice" && method === "POST") {
-          const tokenValue = body.token;
-          const canUseToken = room.hostToken === tokenValue || room.guests.some((guest) => guest.guestToken === tokenValue);
-          if (!canUseToken || !body.peerId || !Array.isArray(body.candidates)) {
-            sendJson(res, { error: "ICE 信令无效" }, 400);
-            return;
-          }
-          const targetPeerId = String(body.targetPeerId || room.hostPeerId);
-          for (const candidate of body.candidates) {
-            appendSignal(roomCode, targetPeerId, {
-              type: "ice",
-              peerId: String(body.peerId),
-              targetPeerId,
-              payload: candidate,
-            });
-          }
-          sendJson(res, { ok: true });
-          return;
-        }
-
-        if (action === "signals" && method === "GET") {
+        if (action === "events" && method === "GET") {
           const peerId = searchParam(requestUrl.search, "peerId");
           if (!peerId) {
             sendJson(res, { error: "缺少 peerId" }, 400);
             return;
           }
-          const key = signalKey(roomCode, peerId);
-          const queued = signals.get(key) ?? [];
-          signals.delete(key);
+          if (!isKnownPeer(room, peerId)) {
+            sendJson(res, { error: "未知 peerId" }, 403);
+            return;
+          }
+          const key = eventKey(roomCode, peerId);
+          const queued = events.get(key) ?? [];
+          events.delete(key);
           sendJson(res, queued);
+          return;
+        }
+
+        if (action === "events" && method === "POST") {
+          const peerId = String(body.peerId ?? "");
+          const targetPeerId = String(body.targetPeerId ?? "");
+          if (peerForToken(room, body.token) !== peerId) {
+            sendJson(res, { error: "令牌无效" }, 403);
+            return;
+          }
+          if (!targetPeerId || !isKnownPeer(room, targetPeerId)) {
+            sendJson(res, { error: "目标 peerId 无效" }, 400);
+            return;
+          }
+          if (!body.message || typeof body.message !== "object" || typeof (body.message as { type?: unknown }).type !== "string") {
+            sendJson(res, { error: "事件消息无效" }, 400);
+            return;
+          }
+          appendEvent(roomCode, targetPeerId, {
+            peerId,
+            targetPeerId,
+            message: body.message,
+          });
+          sendJson(res, { ok: true });
           return;
         }
 

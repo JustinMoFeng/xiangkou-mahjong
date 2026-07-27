@@ -1,9 +1,8 @@
 import { ArrowLeft, Clipboard, Copy, Loader2, Play, RefreshCcw, Users } from "lucide-react";
-import { FormEvent, ReactNode, useEffect, useRef, useState } from "react";
+import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import type { OnlineConnectionState, OnlineMessage } from "./protocol";
 import { createRequestId, shouldApplyStateSnapshot } from "./protocol";
-import { createPeerId, normalizeRoomCode, RoomSignalingClient, type RoomInfo } from "./signaling";
-import { createGuestPeer, createHostPeer, type OnlinePeer } from "./webrtc";
+import { normalizeRoomCode, RoomRelayClient, type RoomEventEnvelope, type RoomInfo } from "./signaling";
 
 export type SharedSeat = 0 | 1 | 2 | 3;
 
@@ -15,16 +14,16 @@ export type RoomGuest = {
   connected: boolean;
 };
 
-type HostPeerRecord = RoomGuest & {
-  peer: OnlinePeer;
-};
-
 export type HostActionResult<TState> = {
   requestId: string;
   ok: boolean;
   reason?: string;
   state: TState;
 };
+
+type OnlineSnapshotState = Extract<OnlineMessage, { type: "stateSnapshot" }>["state"];
+type PlayerSeatAction = { seat: SharedSeat };
+type QueuedHostAction<TAction> = { requestId: string; action: TAction };
 
 type OnlineRoomStrings = {
   gameTitle: string;
@@ -37,7 +36,7 @@ type OnlineRoomStrings = {
   botFillName: string;
 };
 
-type CreateRoomProps<TState, TAction> = {
+type CreateRoomProps<TState extends OnlineSnapshotState, TAction extends PlayerSeatAction> = {
   strings: OnlineRoomStrings;
   onBackMode: () => void;
   createInitialState: (input: { roomCode: string; hostName: string; guests: RoomGuest[] }) => TState;
@@ -46,14 +45,14 @@ type CreateRoomProps<TState, TAction> = {
   renderHostTable: (props: {
     state: TState;
     roomCode: string;
-    incomingAction?: { requestId: string; action: TAction };
+    incomingAction?: QueuedHostAction<TAction>;
     onHostStateChange: (state: TState) => void;
     onHostActionResult: (result: HostActionResult<TState>) => void;
     onLeaveRoom: () => void;
   }) => ReactNode;
 };
 
-type JoinRoomProps<TState, TAction> = {
+type JoinRoomProps<TState extends OnlineSnapshotState, TAction extends PlayerSeatAction> = {
   strings: OnlineRoomStrings;
   initialRoomCode?: string;
   onBackMode: () => void;
@@ -67,27 +66,21 @@ type JoinRoomProps<TState, TAction> = {
   }) => ReactNode;
 };
 
-const client = new RoomSignalingClient();
+const client = new RoomRelayClient();
 
 function toSeat(value: number | undefined, fallback: SharedSeat): SharedSeat {
   return value === 0 || value === 1 || value === 2 || value === 3 ? value : fallback;
 }
 
-function onlineConnectionStateFromPeer(state: RTCPeerConnectionState): OnlineConnectionState {
-  if (state === "connected") return "guest";
-  if (state === "failed" || state === "closed") return "disconnected";
-  return "reconnecting";
+function roomGuests(info: RoomInfo): RoomGuest[] {
+  return (info.guests ?? []).map((guest) => ({
+    ...guest,
+    seat: toSeat(guest.seat, 1),
+    connected: true,
+  }));
 }
 
-function openChannel(peer: OnlinePeer | undefined): boolean {
-  return peer?.channel?.readyState === "open";
-}
-
-function hasPendingHostSignalPeers(peers: Map<string, HostPeerRecord>): boolean {
-  return Array.from(peers.values()).some((record) => !openChannel(record.peer));
-}
-
-export function OnlineCreateRoom<TState, TAction>({
+export function OnlineCreateRoom<TState extends OnlineSnapshotState, TAction extends PlayerSeatAction>({
   strings,
   onBackMode,
   createInitialState,
@@ -99,12 +92,14 @@ export function OnlineCreateRoom<TState, TAction>({
   const [roomInfo, setRoomInfo] = useState<RoomInfo>();
   const [guests, setGuests] = useState<RoomGuest[]>([]);
   const [hostState, setHostState] = useState<TState>();
-  const [incomingAction, setIncomingAction] = useState<{ requestId: string; action: TAction }>();
+  const [incomingAction, setIncomingAction] = useState<QueuedHostAction<TAction>>();
   const [status, setStatus] = useState<"idle" | "creating" | "waiting" | "playing" | "error">("idle");
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
-  const peersRef = useRef<Map<string, HostPeerRecord>>(new Map());
   const hostStateRef = useRef<TState>();
+  const guestsRef = useRef<RoomGuest[]>([]);
+  const incomingActionRef = useRef<QueuedHostAction<TAction>>();
+  const actionQueueRef = useRef<QueuedHostAction<TAction>[]>([]);
   const pendingActionPeerRef = useRef<Map<string, string>>(new Map());
   const hostPeerId = roomInfo?.peerId ?? roomInfo?.hostPeerId;
 
@@ -113,13 +108,8 @@ export function OnlineCreateRoom<TState, TAction>({
   }, [hostState]);
 
   useEffect(() => {
-    return () => {
-      for (const record of peersRef.current.values()) {
-        record.peer.close();
-      }
-      peersRef.current.clear();
-    };
-  }, []);
+    guestsRef.current = guests;
+  }, [guests]);
 
   async function createRoom() {
     const name = nickname.trim() || strings.hostFallbackName;
@@ -139,31 +129,18 @@ export function OnlineCreateRoom<TState, TAction>({
   }
 
   useEffect(() => {
-    if (!roomInfo || !hostPeerId || !roomInfo.hostToken || status === "playing") {
+    if (!roomInfo || status === "playing") {
       return undefined;
     }
 
     const activeRoomCode = roomInfo.roomCode;
-    const activeHostToken = roomInfo.hostToken;
-    const activeHostPeerId = hostPeerId;
     let stopped = false;
 
     async function tick() {
       try {
         const latest = await client.getRoom(activeRoomCode);
         if (stopped) return;
-        const latestGuests = (latest.guests ?? []).map((guest) => ({
-          ...guest,
-          seat: toSeat(guest.seat, 1),
-          connected: openChannel(peersRef.current.get(guest.peerId)?.peer),
-        }));
-        setGuests(latestGuests);
-
-        for (const guest of latestGuests) {
-          if (!peersRef.current.has(guest.peerId)) {
-            await createHostConnection(activeRoomCode, activeHostToken, activeHostPeerId, guest);
-          }
-        }
+        setGuests(roomGuests(latest));
       } catch (cause) {
         if (!stopped) {
           setError(cause instanceof Error ? cause.message : "刷新房间失败");
@@ -177,7 +154,7 @@ export function OnlineCreateRoom<TState, TAction>({
       stopped = true;
       window.clearInterval(timer);
     };
-  }, [hostPeerId, roomInfo, status]);
+  }, [roomInfo, status]);
 
   useEffect(() => {
     if (!roomInfo || !hostPeerId) {
@@ -188,78 +165,36 @@ export function OnlineCreateRoom<TState, TAction>({
     const activeHostPeerId = hostPeerId;
     let stopped = false;
 
-    async function pollSignals() {
-      if (!hasPendingHostSignalPeers(peersRef.current)) {
-        return;
-      }
-
+    async function pollEvents() {
       try {
-        const signals = await client.getSignals(activeRoomCode, activeHostPeerId);
-        for (const signal of signals) {
-          if (signal.type === "answer") {
-            const record = peersRef.current.get(signal.peerId);
-            if (record) {
-              await record.peer.peerConnection.setRemoteDescription(signal.payload as RTCSessionDescriptionInit);
-            }
-          }
-          if (signal.type === "ice") {
-            const record = peersRef.current.get(signal.peerId);
-            if (record) {
-              await record.peer.peerConnection.addIceCandidate(signal.payload as RTCIceCandidateInit);
-            }
-          }
+        const events = await client.getEvents(activeRoomCode, activeHostPeerId);
+        if (stopped) return;
+        for (const event of events) {
+          handleHostEvent(event);
         }
       } catch {
-        if (!stopped) setError("信令同步中断，正在等待下一次轮询");
+        if (!stopped) setError("事件同步中断，正在等待下一次轮询");
       }
     }
 
-    pollSignals();
-    const timer = window.setInterval(pollSignals, 1200);
+    pollEvents();
+    const timer = window.setInterval(pollEvents, 900);
     return () => {
       stopped = true;
       window.clearInterval(timer);
     };
   }, [hostPeerId, roomInfo]);
 
-  async function createHostConnection(roomCode: string, hostToken: string, peerId: string, guest: RoomGuest) {
-    const peer = createHostPeer({
-      onChannelOpen: () => {
-        setGuests((current) => current.map((item) => (item.peerId === guest.peerId ? { ...item, connected: true } : item)));
-        sendSeatAssigned(guest.peerId);
-        sendSnapshotToPeer(guest.peerId, hostStateRef.current);
-      },
-      onChannelClose: () => {
-        setGuests((current) => current.map((item) => (item.peerId === guest.peerId ? { ...item, connected: false } : item)));
-      },
-      onConnectionState: (state) => {
-        if (state === "failed" || state === "closed" || state === "disconnected") {
-          setGuests((current) => current.map((item) => (item.peerId === guest.peerId ? { ...item, connected: false } : item)));
-        }
-      },
-      onIceCandidate: (candidate) => {
-        client.postIce(roomCode, hostToken, peerId, [candidate], guest.peerId).catch(() => {
-          setError("ICE 信令写入失败");
-        });
-      },
-      onMessage: (message) => handleHostMessage(guest.peerId, message),
-    });
-
-    peersRef.current.set(guest.peerId, { ...guest, peer });
-    const offer = await peer.peerConnection.createOffer();
-    await peer.peerConnection.setLocalDescription(offer);
-    await client.postOffer(roomCode, hostToken, offer, peerId, guest.peerId);
-  }
-
-  function handleHostMessage(peerId: string, message: OnlineMessage) {
+  function handleHostEvent(event: RoomEventEnvelope) {
+    const message = event.message;
     if (message.type === "hello") {
-      sendSeatAssigned(peerId);
-      sendSnapshotToPeer(peerId, hostStateRef.current);
+      sendSeatAssigned(event.peerId);
+      sendSnapshotToPeer(event.peerId, hostStateRef.current);
       return;
     }
 
     if (message.type === "syncRequest") {
-      sendSnapshotToPeer(peerId, hostStateRef.current);
+      sendSnapshotToPeer(event.peerId, hostStateRef.current);
       return;
     }
 
@@ -267,14 +202,49 @@ export function OnlineCreateRoom<TState, TAction>({
       return;
     }
 
-    pendingActionPeerRef.current.set(message.requestId, peerId);
-    setIncomingAction({ requestId: message.requestId, action: message.action as TAction });
+    const action = message.action as unknown as TAction;
+    const guest = guestsRef.current.find((item) => item.peerId === event.peerId);
+    if (!guest || action.seat !== guest.seat) {
+      sendMessageToPeer(event.peerId, {
+        type: "actionRejected",
+        requestId: message.requestId,
+        reason: "操作座位和房间座位不一致",
+      });
+      return;
+    }
+
+    pendingActionPeerRef.current.set(message.requestId, event.peerId);
+    actionQueueRef.current.push({ requestId: message.requestId, action });
+    promoteNextAction();
+  }
+
+  function promoteNextAction() {
+    if (incomingActionRef.current) {
+      return;
+    }
+    const next = actionQueueRef.current.shift();
+    if (!next) {
+      return;
+    }
+    incomingActionRef.current = next;
+    setIncomingAction(next);
+  }
+
+  function sendMessageToPeer(peerId: string, message: OnlineMessage): boolean {
+    if (!roomInfo || !roomInfo.hostToken || !hostPeerId) {
+      return false;
+    }
+
+    client.postEvent(roomInfo.roomCode, roomInfo.hostToken, hostPeerId, peerId, message).catch(() => {
+      setError("事件写入失败，正在等待下一次同步");
+    });
+    return true;
   }
 
   function sendSeatAssigned(peerId: string) {
-    const record = peersRef.current.get(peerId);
+    const record = guestsRef.current.find((guest) => guest.peerId === peerId);
     if (!record) return;
-    record.peer.send({
+    sendMessageToPeer(peerId, {
       type: "seatAssigned",
       peerId,
       seat: record.seat,
@@ -283,19 +253,19 @@ export function OnlineCreateRoom<TState, TAction>({
   }
 
   function sendSnapshotToPeer(peerId: string, state: TState | undefined) {
-    const record = peersRef.current.get(peerId);
+    const record = guestsRef.current.find((guest) => guest.peerId === peerId);
     if (!record || !state) return;
-    record.peer.send({
+    sendMessageToPeer(peerId, {
       type: "stateSnapshot",
       roomCode: roomInfo?.roomCode ?? "",
       turn: getStateTurn(state),
-      state: maskStateForSeat(state, record.seat) as never,
+      state: maskStateForSeat(state, record.seat),
     });
   }
 
   function broadcastSnapshot(state: TState) {
     hostStateRef.current = state;
-    for (const record of peersRef.current.values()) {
+    for (const record of guestsRef.current) {
       sendSnapshotToPeer(record.peerId, state);
     }
   }
@@ -303,17 +273,23 @@ export function OnlineCreateRoom<TState, TAction>({
   function handleHostActionResult(result: HostActionResult<TState>) {
     const peerId = pendingActionPeerRef.current.get(result.requestId);
     pendingActionPeerRef.current.delete(result.requestId);
-    const peer = peerId ? peersRef.current.get(peerId)?.peer : undefined;
 
-    peer?.send(
-      result.ok
-        ? { type: "actionAccepted", requestId: result.requestId, turn: getStateTurn(result.state) }
-        : { type: "actionRejected", requestId: result.requestId, reason: result.reason ?? "操作被拒绝" },
-    );
+    if (peerId) {
+      sendMessageToPeer(
+        peerId,
+        result.ok
+          ? { type: "actionAccepted", requestId: result.requestId, turn: getStateTurn(result.state) }
+          : { type: "actionRejected", requestId: result.requestId, reason: result.reason ?? "操作被拒绝" },
+      );
+    }
 
     if (result.ok) {
       broadcastSnapshot(result.state);
     }
+
+    incomingActionRef.current = undefined;
+    setIncomingAction(undefined);
+    window.setTimeout(promoteNextAction, 0);
   }
 
   function startGame() {
@@ -325,7 +301,11 @@ export function OnlineCreateRoom<TState, TAction>({
     });
     setHostState(next);
     setStatus("playing");
-    window.setTimeout(() => broadcastSnapshot(next), 0);
+
+    for (const guest of guests) {
+      sendSeatAssigned(guest.peerId);
+      sendSnapshotToPeer(guest.peerId, next);
+    }
   }
 
   async function copyRoomCode() {
@@ -394,7 +374,7 @@ export function OnlineCreateRoom<TState, TAction>({
                   <div className="room-seat" key={seat}>
                     <span>{seat === 0 ? "本家" : `${seat + 1} 号位`}</span>
                     <strong>{label}</strong>
-                    <em>{seat === 0 ? "房主" : guest ? (guest.connected ? "已连接" : "信令中") : "空位"}</em>
+                    <em>{seat === 0 ? "房主" : guest ? "已加入" : "空位"}</em>
                   </div>
                 );
               })}
@@ -418,7 +398,7 @@ export function OnlineCreateRoom<TState, TAction>({
   );
 }
 
-export function OnlineJoinRoom<TState, TAction>({
+export function OnlineJoinRoom<TState extends OnlineSnapshotState, TAction extends PlayerSeatAction>({
   strings,
   initialRoomCode,
   onBackMode,
@@ -431,14 +411,10 @@ export function OnlineJoinRoom<TState, TAction>({
   const [status, setStatus] = useState<"idle" | "joining" | "waiting" | "playing" | "error">("idle");
   const [connectionState, setConnectionState] = useState<OnlineConnectionState>("reconnecting");
   const [error, setError] = useState("");
-  const peerRef = useRef<OnlinePeer>();
   const guestPeerId = joined?.peerId;
   const guestToken = joined?.guestToken;
+  const hostPeerId = joined?.hostPeerId;
   const seat = toSeat(joined?.seat, 1);
-
-  useEffect(() => {
-    return () => peerRef.current?.close();
-  }, []);
 
   async function joinRoom(event?: FormEvent) {
     event?.preventDefault();
@@ -457,7 +433,7 @@ export function OnlineJoinRoom<TState, TAction>({
       const info = await client.joinRoom(code, name);
       setJoined(info);
       setStatus("waiting");
-      setConnectionState("reconnecting");
+      setConnectionState("guest");
     } catch (cause) {
       setStatus("error");
       setError(cause instanceof Error ? cause.message : "加入房间失败");
@@ -465,79 +441,36 @@ export function OnlineJoinRoom<TState, TAction>({
   }
 
   useEffect(() => {
-    if (!joined || !guestPeerId || !guestToken || connectionState === "guest") {
+    if (!joined || !guestPeerId) {
       return undefined;
     }
 
     const activeRoomCode = joined.roomCode;
     const activeGuestPeerId = guestPeerId;
-    const activeGuestToken = guestToken;
     let stopped = false;
 
-    async function pollSignals() {
+    async function pollEvents() {
       try {
-        const signals = await client.getSignals(activeRoomCode, activeGuestPeerId);
-        for (const signal of signals) {
-          if (signal.type === "offer") {
-            const peer = ensureGuestPeer(signal.peerId);
-            await peer.peerConnection.setRemoteDescription(signal.payload as RTCSessionDescriptionInit);
-            const answer = await peer.peerConnection.createAnswer();
-            await peer.peerConnection.setLocalDescription(answer);
-            await client.postAnswer(activeRoomCode, activeGuestToken, seat, answer, activeGuestPeerId, signal.peerId);
-          }
-
-          if (signal.type === "ice") {
-            const peer = peerRef.current;
-            if (peer) {
-              await peer.peerConnection.addIceCandidate(signal.payload as RTCIceCandidateInit);
-            }
-          }
+        const events = await client.getEvents(activeRoomCode, activeGuestPeerId);
+        if (stopped) return;
+        setConnectionState("guest");
+        for (const event of events) {
+          handleGuestMessage(event.message);
         }
       } catch {
         if (!stopped) {
-          setConnectionState((current) => (current === "guest" ? "reconnecting" : current));
+          setConnectionState("reconnecting");
         }
       }
     }
 
-    pollSignals();
-    const timer = window.setInterval(pollSignals, 1200);
+    pollEvents();
+    const timer = window.setInterval(pollEvents, 900);
     return () => {
       stopped = true;
       window.clearInterval(timer);
     };
-  }, [connectionState, guestPeerId, guestToken, joined, seat]);
-
-  function ensureGuestPeer(targetPeerId: string): OnlinePeer {
-    if (peerRef.current) {
-      return peerRef.current;
-    }
-
-    const peer = createGuestPeer({
-      onChannelOpen: () => {
-        setConnectionState("guest");
-        setStatus((current) => (current === "waiting" ? "waiting" : current));
-        peer.send({
-          type: "hello",
-          peerId: guestPeerId ?? createPeerId("guest"),
-          nickname: nickname.trim() || strings.guestFallbackName,
-          requestedSeat: seat,
-        });
-      },
-      onChannelClose: () => setConnectionState("reconnecting"),
-      onConnectionState: (state) => setConnectionState(onlineConnectionStateFromPeer(state)),
-      onIceCandidate: (candidate) => {
-        if (!joined || !guestToken || !guestPeerId) return;
-        client.postIce(joined.roomCode, guestToken, guestPeerId, [candidate], targetPeerId).catch(() => {
-          setError("ICE 信令写入失败");
-        });
-      },
-      onMessage: handleGuestMessage,
-    });
-
-    peerRef.current = peer;
-    return peer;
-  }
+  }, [guestPeerId, joined]);
 
   function handleGuestMessage(message: OnlineMessage) {
     if (message.type === "seatAssigned") {
@@ -553,23 +486,41 @@ export function OnlineJoinRoom<TState, TAction>({
 
     if (message.type === "actionRejected") {
       setError(message.reason);
+      return;
+    }
+
+    if (message.type === "actionAccepted") {
+      setError("");
     }
   }
 
-  function sendPlayerAction(action: TAction) {
-    const ok = peerRef.current?.send({
+  async function sendToHost(message: OnlineMessage): Promise<boolean> {
+    if (!joined || !guestToken || !guestPeerId || !hostPeerId) {
+      setConnectionState("reconnecting");
+      setError("房间同步尚未就绪");
+      return false;
+    }
+
+    try {
+      await client.postEvent(joined.roomCode, guestToken, guestPeerId, hostPeerId, message);
+      setConnectionState("guest");
+      return true;
+    } catch (cause) {
+      setConnectionState("reconnecting");
+      setError(cause instanceof Error ? cause.message : "操作发送失败");
+      return false;
+    }
+  }
+
+  async function sendPlayerAction(action: TAction) {
+    await sendToHost({
       type: "playerAction",
       requestId: createRequestId(),
-      action: action as never,
+      action: action as unknown as Extract<OnlineMessage, { type: "playerAction" }>["action"],
     });
-
-    if (!ok) {
-      setConnectionState("reconnecting");
-      setError("连接尚未恢复，操作未发送");
-    }
   }
 
-  const roomTitle = roomCode ? `${strings.joinTitle} ${roomCode}` : strings.joinTitle;
+  const roomTitle = useMemo(() => (roomCode ? `${strings.joinTitle} ${roomCode}` : strings.joinTitle), [roomCode, strings.joinTitle]);
 
   if (status === "playing" && joined && tableState) {
     return renderGuestTable({
@@ -624,14 +575,10 @@ export function OnlineJoinRoom<TState, TAction>({
             <div className="room-code-block">
               <span>房间号</span>
               <strong>{joined.roomCode}</strong>
-              <em>{connectionState === "guest" ? "已连接房主" : "连接中"}</em>
+              <em>{connectionState === "guest" ? "已加入房间" : "同步中"}</em>
             </div>
             <p className="room-waiting-text">你坐 {seat + 1} 号位。房主开始后会自动进入牌桌。</p>
             {error ? <p className="room-error">{error}</p> : null}
-            <button className="room-secondary" type="button" onClick={() => peerRef.current?.send({ type: "syncRequest", seat })}>
-              <RefreshCcw size={17} />
-              请求同步
-            </button>
           </section>
         )}
       </section>
