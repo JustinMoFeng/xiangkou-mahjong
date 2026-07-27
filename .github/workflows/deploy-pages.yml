@@ -38,11 +38,14 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Prepare EdgeOne deploy package
+        run: node scripts/prepare-edgeone-deploy.mjs
+
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: dist
-          path: dist
+          name: edgeone-output
+          path: edgeone-output
 
   deploy:
     if: github.event_name != 'pull_request'
@@ -54,10 +57,10 @@ jobs:
       - name: Download build artifact
         uses: actions/download-artifact@v4
         with:
-          name: dist
-          path: dist
+          name: edgeone-output
+          path: edgeone-output
 
       - name: Deploy to EdgeOne
-        run: npx edgeone@1.6.16 makers deploy dist -n xiangkou-mahjong -t "$EDGEONE_API_TOKEN" --area global --env production --json
+        run: npx edgeone@1.6.16 makers deploy edgeone-output -n xiangkou-mahjong -t "$EDGEONE_API_TOKEN" --area global --env production --json
         env:
           EDGEONE_API_TOKEN: ${{ secrets.EDGEONE_API_TOKEN }}
