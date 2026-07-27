@@ -1,4 +1,4 @@
-const CACHE_NAME = "xiangkou-mahjong-v2";
+const CACHE_NAME = "xiangkou-mahjong-v3";
 const SCOPE_PATH = new URL(self.registration.scope).pathname;
 const scopedPath = (path) => `${SCOPE_PATH}${path}`.replace(/\/{2,}/g, "/");
 const CORE_ASSETS = [
@@ -25,6 +25,12 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("fetch", (event) => {
+  const url = new URL(event.request.url);
+  if (url.origin === self.location.origin && url.pathname.startsWith(scopedPath("api/"))) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+
   if (event.request.method !== "GET") return;
 
   if (event.request.mode === "navigate") {
