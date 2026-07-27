@@ -1,5 +1,9 @@
 const ROOM_TTL_SECONDS = 10 * 60;
 const SIGNAL_TTL_SECONDS = 30 * 60;
+const BLOB_STORE_NAME = "xiangkou-mahjong-rooms";
+const BLOB_ENTRY_VERSION = 1;
+
+let pagesBlobStorePromise;
 
 export function json(data, init = {}) {
   return new Response(JSON.stringify(data), {
@@ -20,12 +24,68 @@ export async function readJson(request) {
   }
 }
 
+function isKvLike(value) {
+  return value && typeof value.get === "function" && typeof value.put === "function" && typeof value.delete === "function";
+}
+
+async function getPagesBlobStore() {
+  if (!pagesBlobStorePromise) {
+    pagesBlobStorePromise = import("@edgeone/pages-blob").then(({ getStore }) =>
+      getStore({ name: BLOB_STORE_NAME, consistency: "strong" }),
+    );
+  }
+  return pagesBlobStorePromise;
+}
+
+function ttlExpiresAt(ttlSeconds) {
+  const ttl = Number(ttlSeconds);
+  return Number.isFinite(ttl) && ttl > 0 ? now() + ttl * 1000 : undefined;
+}
+
+function createPagesBlobKv() {
+  return {
+    async get(key) {
+      const store = await getPagesBlobStore();
+      const entry = await store.get(key, { type: "json", consistency: "strong" });
+
+      if (!entry) return null;
+
+      if (entry.__roomsBlobVersion === BLOB_ENTRY_VERSION) {
+        if (typeof entry.expiresAt === "number" && entry.expiresAt <= now()) {
+          await store.delete(key);
+          return null;
+        }
+        return typeof entry.value === "string" ? entry.value : JSON.stringify(entry.value);
+      }
+
+      return typeof entry === "string" ? entry : JSON.stringify(entry);
+    },
+    async put(key, value, options = {}) {
+      const store = await getPagesBlobStore();
+      await store.setJSON(
+        key,
+        {
+          __roomsBlobVersion: BLOB_ENTRY_VERSION,
+          value,
+          expiresAt: ttlExpiresAt(options.expirationTtl),
+          storedAt: now(),
+        },
+        { cacheControl: "no-store" },
+      );
+    },
+    async delete(key) {
+      const store = await getPagesBlobStore();
+      await store.delete(key);
+    },
+  };
+}
+
 export function getKv(env) {
   const kv = env?.ROOMS_KV ?? env?.room_kv ?? env?.rooms_kv ?? env?.KV ?? env?.kv;
-  if (!kv) {
-    throw new Error("ROOMS_KV binding is not configured.");
+  if (isKvLike(kv)) {
+    return kv;
   }
-  return kv;
+  return createPagesBlobKv();
 }
 
 export async function kvGetJson(kv, key) {
