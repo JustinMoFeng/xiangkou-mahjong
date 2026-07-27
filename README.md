@@ -42,6 +42,7 @@
 - 机器人回合与自动摸牌由 DO 内的 `setTimeout` 驱动（`src/online/autoplay.ts` 抽出的纯函数，川麻额外处理定缺阶段与已胡玩家跳过），节奏与本地一致。
 - 本地开发：`npm run cf:dev`（构建后用 `wrangler dev` 起 DO）。前端用 `VITE_ONLINE_BACKEND=cloudflare` 把巷口与川麻的朋友房间入口切换到云端，默认仍走 EdgeOne。
 - 自动部署：GitHub Actions（`.github/workflows/deploy-cloudflare.yml`）在 push 到 `feature/cloudflare-online` 时运行单测+worker 类型检查，用 `VITE_ONLINE_BACKEND=cloudflare` 构建后 `wrangler deploy`。需在仓库配置 `CLOUDFLARE_API_TOKEN` 与 `CLOUDFLARE_ACCOUNT_ID` secrets。手动兜底用 `npm run cf:deploy`。
+- `CLOUDFLARE_API_TOKEN` 建议用最小权限自定义令牌：Account 级 Workers Scripts / Workers KV Storage 编辑，Zone 级（限定 `9423.net`）Workers Routes / DNS 编辑，并把账号与 Zone 范围限定到本项目。
 - 线上地址：自定义域名 `majong-cloud.9423.net`（与 EdgeOne 的 `majong.9423.net` 相互独立），另有 `xiangkou-mahjong.<子域>.workers.dev` 备用。
 - 注意：Cloudflare 在中国大陆的连通性弱于 EdgeOne，是否切换需结合用户地域权衡。
 
