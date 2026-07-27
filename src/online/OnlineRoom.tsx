@@ -67,6 +67,10 @@ type JoinRoomProps<TState extends OnlineSnapshotState, TAction extends PlayerSea
 };
 
 const client = new RoomRelayClient();
+const LOBBY_POLL_INTERVAL_MS = 1500;
+const EVENT_POLL_INTERVAL_MS = 500;
+const FAST_EVENT_POLL_INTERVAL_MS = 160;
+const FAST_EVENT_POLL_TIMEOUT_MS = 8000;
 
 function toSeat(value: number | undefined, fallback: SharedSeat): SharedSeat {
   return value === 0 || value === 1 || value === 2 || value === 3 ? value : fallback;
@@ -78,6 +82,51 @@ function roomGuests(info: RoomInfo): RoomGuest[] {
     seat: toSeat(guest.seat, 1),
     connected: true,
   }));
+}
+
+function snapshotKey(state: unknown, turn: number): string {
+  const value = state as {
+    phase?: string;
+    currentSeat?: number;
+    wall?: unknown[];
+    pendingClaim?: { id?: string; seat?: number; options?: unknown[] };
+    recentAction?: string;
+    players?: Array<{
+      seat?: number;
+      hand?: unknown[];
+      drawnTileId?: string;
+      discards?: unknown[];
+      melds?: unknown[];
+      missingSuit?: string;
+      hasWon?: boolean;
+      score?: number;
+    }>;
+  };
+
+  return JSON.stringify({
+    turn,
+    phase: value.phase,
+    currentSeat: value.currentSeat,
+    wall: value.wall?.length,
+    pendingClaim: value.pendingClaim
+      ? {
+          id: value.pendingClaim.id,
+          seat: value.pendingClaim.seat,
+          options: value.pendingClaim.options?.length,
+        }
+      : undefined,
+    recentAction: value.recentAction,
+    players: value.players?.map((player) => ({
+      seat: player.seat,
+      hand: player.hand?.length,
+      drawnTileId: player.drawnTileId,
+      discards: player.discards?.length,
+      melds: player.melds?.length,
+      missingSuit: player.missingSuit,
+      hasWon: player.hasWon,
+      score: player.score,
+    })),
+  });
 }
 
 export function OnlineCreateRoom<TState extends OnlineSnapshotState, TAction extends PlayerSeatAction>({
@@ -101,6 +150,7 @@ export function OnlineCreateRoom<TState extends OnlineSnapshotState, TAction ext
   const incomingActionRef = useRef<QueuedHostAction<TAction>>();
   const actionQueueRef = useRef<QueuedHostAction<TAction>[]>([]);
   const pendingActionPeerRef = useRef<Map<string, string>>(new Map());
+  const lastBroadcastKeyRef = useRef<string>();
   const hostPeerId = roomInfo?.peerId ?? roomInfo?.hostPeerId;
 
   function updateGuests(nextGuests: RoomGuest[]) {
@@ -154,7 +204,7 @@ export function OnlineCreateRoom<TState extends OnlineSnapshotState, TAction ext
     }
 
     tick();
-    const timer = window.setInterval(tick, 1800);
+    const timer = window.setInterval(tick, LOBBY_POLL_INTERVAL_MS);
     return () => {
       stopped = true;
       window.clearInterval(timer);
@@ -183,7 +233,7 @@ export function OnlineCreateRoom<TState extends OnlineSnapshotState, TAction ext
     }
 
     pollEvents();
-    const timer = window.setInterval(pollEvents, 900);
+    const timer = window.setInterval(pollEvents, EVENT_POLL_INTERVAL_MS);
     return () => {
       stopped = true;
       window.clearInterval(timer);
@@ -278,6 +328,11 @@ export function OnlineCreateRoom<TState extends OnlineSnapshotState, TAction ext
 
   function broadcastSnapshot(state: TState) {
     hostStateRef.current = state;
+    const key = snapshotKey(state, getStateTurn(state));
+    if (lastBroadcastKeyRef.current === key) {
+      return;
+    }
+    lastBroadcastKeyRef.current = key;
     for (const record of guestsRef.current) {
       sendSnapshotToPeer(record.peerId, state);
     }
@@ -314,6 +369,7 @@ export function OnlineCreateRoom<TState extends OnlineSnapshotState, TAction ext
     });
     setHostState(next);
     setStatus("playing");
+    lastBroadcastKeyRef.current = snapshotKey(next, getStateTurn(next));
 
     for (const guest of guestsRef.current.length > guests.length ? guestsRef.current : guests) {
       sendSeatAssignedToGuest(guest);
@@ -424,10 +480,31 @@ export function OnlineJoinRoom<TState extends OnlineSnapshotState, TAction exten
   const [status, setStatus] = useState<"idle" | "joining" | "waiting" | "playing" | "error">("idle");
   const [connectionState, setConnectionState] = useState<OnlineConnectionState>("reconnecting");
   const [error, setError] = useState("");
+  const [fastPollingUntil, setFastPollingUntil] = useState(0);
   const guestPeerId = joined?.peerId;
   const guestToken = joined?.guestToken;
   const hostPeerId = joined?.hostPeerId;
   const seat = toSeat(joined?.seat, 1);
+  const pendingActionRequestIdsRef = useRef<Set<string>>(new Set());
+
+  function activateFastPolling() {
+    setFastPollingUntil(Date.now() + FAST_EVENT_POLL_TIMEOUT_MS);
+  }
+
+  function stopFastPolling() {
+    setFastPollingUntil(0);
+    pendingActionRequestIdsRef.current.clear();
+  }
+
+  useEffect(() => {
+    if (!fastPollingUntil) {
+      return undefined;
+    }
+
+    const delay = Math.max(0, fastPollingUntil - Date.now());
+    const timer = window.setTimeout(stopFastPolling, delay);
+    return () => window.clearTimeout(timer);
+  }, [fastPollingUntil]);
 
   async function joinRoom(event?: FormEvent) {
     event?.preventDefault();
@@ -478,12 +555,15 @@ export function OnlineJoinRoom<TState extends OnlineSnapshotState, TAction exten
     }
 
     pollEvents();
-    const timer = window.setInterval(pollEvents, 900);
+    const timer = window.setInterval(
+      pollEvents,
+      fastPollingUntil > Date.now() ? FAST_EVENT_POLL_INTERVAL_MS : EVENT_POLL_INTERVAL_MS,
+    );
     return () => {
       stopped = true;
       window.clearInterval(timer);
     };
-  }, [guestPeerId, joined]);
+  }, [fastPollingUntil, guestPeerId, joined]);
 
   function handleGuestMessage(message: OnlineMessage) {
     if (message.type === "seatAssigned") {
@@ -494,15 +574,24 @@ export function OnlineJoinRoom<TState extends OnlineSnapshotState, TAction exten
     if (shouldApplyStateSnapshot("guest", message)) {
       setTableState(message.state as TState);
       setStatus("playing");
+      stopFastPolling();
       return;
     }
 
     if (message.type === "actionRejected") {
+      pendingActionRequestIdsRef.current.delete(message.requestId);
+      if (pendingActionRequestIdsRef.current.size === 0) {
+        stopFastPolling();
+      }
       setError(message.reason);
       return;
     }
 
     if (message.type === "actionAccepted") {
+      pendingActionRequestIdsRef.current.delete(message.requestId);
+      if (pendingActionRequestIdsRef.current.size > 0) {
+        activateFastPolling();
+      }
       setError("");
     }
   }
@@ -526,11 +615,20 @@ export function OnlineJoinRoom<TState extends OnlineSnapshotState, TAction exten
   }
 
   async function sendPlayerAction(action: TAction) {
-    await sendToHost({
+    const requestId = createRequestId();
+    pendingActionRequestIdsRef.current.add(requestId);
+    activateFastPolling();
+    const sent = await sendToHost({
       type: "playerAction",
-      requestId: createRequestId(),
+      requestId,
       action: action as unknown as Extract<OnlineMessage, { type: "playerAction" }>["action"],
     });
+    if (!sent) {
+      pendingActionRequestIdsRef.current.delete(requestId);
+      if (pendingActionRequestIdsRef.current.size === 0) {
+        stopFastPolling();
+      }
+    }
   }
 
   const roomTitle = useMemo(() => (roomCode ? `${strings.joinTitle} ${roomCode}` : strings.joinTitle), [roomCode, strings.joinTitle]);
