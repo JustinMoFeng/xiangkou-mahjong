@@ -41,7 +41,7 @@
 - 所有玩家通过 **WebSocket** 连接同一个 DO，只发送操作、只接收按座位遮牌后的快照；**没有房主浏览器、没有 P2P**，任何人掉线都能用同一 `clientId` 重连回原座位与最新牌局。
 - 机器人回合与自动摸牌由 DO 内的 `setTimeout` 驱动（`src/online/autoplay.ts` 抽出的纯函数，川麻额外处理定缺阶段与已胡玩家跳过），节奏与本地一致。
 - 本地开发：`npm run cf:dev`（构建后用 `wrangler dev` 起 DO）。前端用 `VITE_ONLINE_BACKEND=cloudflare` 把巷口与川麻的朋友房间入口切换到云端，默认仍走 EdgeOne。
-- 自动部署：Cloudflare 原生 Git 集成（Workers Builds）关联 `feature/cloudflare-online` 分支，push 即构建部署；构建命令 `npm run build`，环境变量 `VITE_ONLINE_BACKEND=cloudflare`。手动兜底用 `npm run cf:deploy`。
+- 自动部署：GitHub Actions（`.github/workflows/deploy-cloudflare.yml`）在 push 到 `feature/cloudflare-online` 时运行单测+worker 类型检查，用 `VITE_ONLINE_BACKEND=cloudflare` 构建后 `wrangler deploy`。需在仓库配置 `CLOUDFLARE_API_TOKEN` 与 `CLOUDFLARE_ACCOUNT_ID` secrets。手动兜底用 `npm run cf:deploy`。
 - 线上地址：自定义域名 `majong-cloud.9423.net`（与 EdgeOne 的 `majong.9423.net` 相互独立），另有 `xiangkou-mahjong.<子域>.workers.dev` 备用。
 - 注意：Cloudflare 在中国大陆的连通性弱于 EdgeOne，是否切换需结合用户地域权衡。
 

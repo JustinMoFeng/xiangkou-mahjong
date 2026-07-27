@@ -1,0 +1,59 @@
+name: Deploy Cloudflare
+
+# Server-authoritative online backend (Durable Objects). Deploys only from the
+# feature/cloudflare-online branch, separate from the EdgeOne workflow on main.
+on:
+  push:
+    branches:
+      - feature/cloudflare-online
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: cloudflare-production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # Pin a known-good npm; npm 10.x can crash with
+      # "Exit handler never called!" on some runners.
+      - name: Pin npm
+        run: npm install -g npm@11
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run unit tests
+        run: npm run test
+
+      - name: Typecheck worker
+        run: npm run typecheck:worker
+
+      # Build the SPA with the Cloudflare backend so the deployed domain uses the
+      # server-authoritative (Durable Objects) friend rooms by default.
+      - name: Build
+        run: npm run build
+        env:
+          VITE_ONLINE_BACKEND: cloudflare
+
+      - name: Deploy to Cloudflare
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # dist/ is already built above; skip wrangler's own build.
+          command: deploy
