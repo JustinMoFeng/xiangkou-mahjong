@@ -83,6 +83,10 @@ function openChannel(peer: OnlinePeer | undefined): boolean {
   return peer?.channel?.readyState === "open";
 }
 
+function hasPendingHostSignalPeers(peers: Map<string, HostPeerRecord>): boolean {
+  return Array.from(peers.values()).some((record) => !openChannel(record.peer));
+}
+
 export function OnlineCreateRoom<TState, TAction>({
   strings,
   onBackMode,
@@ -185,6 +189,10 @@ export function OnlineCreateRoom<TState, TAction>({
     let stopped = false;
 
     async function pollSignals() {
+      if (!hasPendingHostSignalPeers(peersRef.current)) {
+        return;
+      }
+
       try {
         const signals = await client.getSignals(activeRoomCode, activeHostPeerId);
         for (const signal of signals) {
@@ -457,7 +465,7 @@ export function OnlineJoinRoom<TState, TAction>({
   }
 
   useEffect(() => {
-    if (!joined || !guestPeerId || !guestToken) {
+    if (!joined || !guestPeerId || !guestToken || connectionState === "guest") {
       return undefined;
     }
 
@@ -498,7 +506,7 @@ export function OnlineJoinRoom<TState, TAction>({
       stopped = true;
       window.clearInterval(timer);
     };
-  }, [guestPeerId, guestToken, joined, seat]);
+  }, [connectionState, guestPeerId, guestToken, joined, seat]);
 
   function ensureGuestPeer(targetPeerId: string): OnlinePeer {
     if (peerRef.current) {
