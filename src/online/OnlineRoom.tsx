@@ -151,6 +151,8 @@ export function OnlineCreateRoom<TState extends OnlineSnapshotState, TAction ext
   const actionQueueRef = useRef<QueuedHostAction<TAction>[]>([]);
   const pendingActionPeerRef = useRef<Map<string, string>>(new Map());
   const lastBroadcastKeyRef = useRef<string>();
+  const hostPollingRef = useRef(false);
+  const snapshotRevisionRef = useRef(0);
   const hostPeerId = roomInfo?.peerId ?? roomInfo?.hostPeerId;
 
   function updateGuests(nextGuests: RoomGuest[]) {
@@ -221,6 +223,10 @@ export function OnlineCreateRoom<TState extends OnlineSnapshotState, TAction ext
     let stopped = false;
 
     async function pollEvents() {
+      if (hostPollingRef.current) {
+        return;
+      }
+      hostPollingRef.current = true;
       try {
         const events = await client.getEvents(activeRoomCode, activeHostPeerId);
         if (stopped) return;
@@ -229,6 +235,8 @@ export function OnlineCreateRoom<TState extends OnlineSnapshotState, TAction ext
         }
       } catch {
         if (!stopped) setError("事件同步中断，正在等待下一次轮询");
+      } finally {
+        hostPollingRef.current = false;
       }
     }
 
@@ -322,6 +330,7 @@ export function OnlineCreateRoom<TState extends OnlineSnapshotState, TAction ext
       type: "stateSnapshot",
       roomCode: roomInfo?.roomCode ?? "",
       turn: getStateTurn(state),
+      revision: snapshotRevisionRef.current,
       state: maskStateForSeat(state, record.seat),
     });
   }
@@ -333,6 +342,7 @@ export function OnlineCreateRoom<TState extends OnlineSnapshotState, TAction ext
       return;
     }
     lastBroadcastKeyRef.current = key;
+    snapshotRevisionRef.current += 1;
     for (const record of guestsRef.current) {
       sendSnapshotToPeer(record.peerId, state);
     }
@@ -370,6 +380,7 @@ export function OnlineCreateRoom<TState extends OnlineSnapshotState, TAction ext
     setHostState(next);
     setStatus("playing");
     lastBroadcastKeyRef.current = snapshotKey(next, getStateTurn(next));
+    snapshotRevisionRef.current += 1;
 
     for (const guest of guestsRef.current.length > guests.length ? guestsRef.current : guests) {
       sendSeatAssignedToGuest(guest);
@@ -486,6 +497,8 @@ export function OnlineJoinRoom<TState extends OnlineSnapshotState, TAction exten
   const hostPeerId = joined?.hostPeerId;
   const seat = toSeat(joined?.seat, 1);
   const pendingActionRequestIdsRef = useRef<Set<string>>(new Set());
+  const guestPollingRef = useRef(false);
+  const latestSnapshotRevisionRef = useRef(0);
 
   function activateFastPolling() {
     setFastPollingUntil(Date.now() + FAST_EVENT_POLL_TIMEOUT_MS);
@@ -540,6 +553,10 @@ export function OnlineJoinRoom<TState extends OnlineSnapshotState, TAction exten
     let stopped = false;
 
     async function pollEvents() {
+      if (guestPollingRef.current) {
+        return;
+      }
+      guestPollingRef.current = true;
       try {
         const events = await client.getEvents(activeRoomCode, activeGuestPeerId);
         if (stopped) return;
@@ -551,6 +568,8 @@ export function OnlineJoinRoom<TState extends OnlineSnapshotState, TAction exten
         if (!stopped) {
           setConnectionState("reconnecting");
         }
+      } finally {
+        guestPollingRef.current = false;
       }
     }
 
@@ -572,6 +591,11 @@ export function OnlineJoinRoom<TState extends OnlineSnapshotState, TAction exten
     }
 
     if (shouldApplyStateSnapshot("guest", message)) {
+      const revision = message.revision ?? message.turn;
+      if (revision < latestSnapshotRevisionRef.current) {
+        return;
+      }
+      latestSnapshotRevisionRef.current = revision;
       setTableState(message.state as TState);
       setStatus("playing");
       stopFastPolling();
