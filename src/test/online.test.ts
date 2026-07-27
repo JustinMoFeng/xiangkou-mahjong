@@ -6,6 +6,9 @@ import { applyHostPlayerAction, maskStateForSeat } from "../online/gameActions";
 import { shouldApplyStateSnapshot } from "../online/protocol";
 import { applySichuanHostPlayerAction, maskSichuanStateForSeat } from "../online/sichuanActions";
 import { createNewGame as createSichuanGame } from "../sichuan/engine";
+import { OnlineCreateRoom, OnlineJoinRoom } from "../online/OnlineRoom";
+import { SichuanCreateRoom, SichuanJoinRoom } from "../online/SichuanRoom";
+import { XiangkouCreateRoom, XiangkouJoinRoom } from "../online/XiangkouRoom";
 
 const tilePool = createWall();
 
@@ -150,5 +153,16 @@ describe("sichuan online host action handling", () => {
     expect(masked.players[0].hand.every((tile) => tile.id.startsWith("hidden-"))).toBe(true);
     expect(masked.players[2].hand.every((tile) => tile.id.startsWith("hidden-"))).toBe(true);
     expect(masked.wall.every((tile) => tile.id.startsWith("hidden-"))).toBe(true);
+  });
+});
+
+describe("online room adapters", () => {
+  it("keeps Xiangkou and Sichuan wired through the generic room components", () => {
+    expect(OnlineCreateRoom).toBeTypeOf("function");
+    expect(OnlineJoinRoom).toBeTypeOf("function");
+    expect(XiangkouCreateRoom).toBeTypeOf("function");
+    expect(XiangkouJoinRoom).toBeTypeOf("function");
+    expect(SichuanCreateRoom).toBeTypeOf("function");
+    expect(SichuanJoinRoom).toBeTypeOf("function");
   });
 });
