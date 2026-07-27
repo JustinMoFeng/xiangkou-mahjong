@@ -1,4 +1,5 @@
 import type { SuitPrefix, Tile, TileCode } from "./types";
+import { tileAssetPath as sharedTileAssetPath } from "../game/tileAssets";
 
 const NUMBERS = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
 
@@ -87,5 +88,5 @@ export function tileColorClass(code: TileCode): string {
 }
 
 export function tileAssetPath(code: TileCode | "back"): string {
-  return `${import.meta.env.BASE_URL}tiles/${code}.svg`;
+  return sharedTileAssetPath(code);
 }

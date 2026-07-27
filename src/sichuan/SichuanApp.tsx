@@ -654,7 +654,7 @@ function ClaimOptions({
           <span>{option.label}</span>
           <span className="claim-option__tiles">
             {option.previewTileCodes.map((code, index) => (
-              <img key={`${option.id}-${code}-${index}`} src={tileAssetPath(code)} alt="" draggable={false} />
+              <img key={`${option.id}-${code}-${index}`} src={tileAssetPath(code)} alt="" draggable={false} decoding="async" />
             ))}
           </span>
         </button>
@@ -682,7 +682,13 @@ function TileFace({
         fresh ? "is-fresh" : ""
       } ${highlighted ? "is-highlighted" : ""}`}
     >
-      <img className="tile-face__image" src={tileAssetPath(isHidden ? "back" : tile.code)} alt={tile.label} draggable={false} />
+      <img
+        className="tile-face__image"
+        src={tileAssetPath(isHidden ? "back" : tile.code)}
+        alt={tile.label}
+        draggable={false}
+        decoding="async"
+      />
     </span>
   );
 }

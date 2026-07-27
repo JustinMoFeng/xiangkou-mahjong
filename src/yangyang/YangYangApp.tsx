@@ -174,7 +174,7 @@ export default function YangYangApp({ onBackHome }: { onBackHome: () => void }) 
         data-zone={tile.zone}
         data-blocked={blocked ? "true" : "false"}
       >
-        <img src={tileAssetPath(tile.code)} alt={tileLabel(tile.code)} draggable={false} />
+        <img src={tileAssetPath(tile.code)} alt={tileLabel(tile.code)} draggable={false} decoding="async" />
       </button>
     );
   }
@@ -250,7 +250,7 @@ export default function YangYangApp({ onBackHome }: { onBackHome: () => void }) 
             const slot = state.slots[index];
             return (
               <div key={index} className={`yang-slot ${slot ? "is-filled" : ""}`} data-testid="yang-slot">
-                {slot ? <img src={tileAssetPath(slot.code)} alt={tileLabel(slot.code)} draggable={false} /> : <span />}
+                {slot ? <img src={tileAssetPath(slot.code)} alt={tileLabel(slot.code)} draggable={false} decoding="async" /> : <span />}
               </div>
             );
           })}
