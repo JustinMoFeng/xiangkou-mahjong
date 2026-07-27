@@ -77,6 +77,10 @@ function createPagesBlobKv() {
       const store = await getPagesBlobStore();
       await store.delete(key);
     },
+    async list(options = {}) {
+      const store = await getPagesBlobStore();
+      return store.list({ ...options, consistency: "strong" });
+    },
   };
 }
 
@@ -123,6 +127,29 @@ export function signalKey(roomCode, peerId) {
   return `signals:${roomCode}:${peerId}`;
 }
 
+function signalPrefix(roomCode, peerId) {
+  return `${signalKey(roomCode, peerId)}:`;
+}
+
+function signalItemKey(roomCode, peerId, signal) {
+  return `${signalPrefix(roomCode, peerId)}${signal.createdAt.toString(36)}:${signal.id}`;
+}
+
+async function listKvKeys(kv, prefix) {
+  if (typeof kv.list !== "function") {
+    return [];
+  }
+
+  const result = await kv.list({ prefix });
+  if (Array.isArray(result?.blobs)) {
+    return result.blobs.map((blob) => blob.key).filter(Boolean);
+  }
+  if (Array.isArray(result?.keys)) {
+    return result.keys.map((key) => key.name ?? key.key).filter(Boolean);
+  }
+  return [];
+}
+
 export function roomPublicInfo(room) {
   return {
     roomCode: room.roomCode,
@@ -159,22 +186,45 @@ export function canUseToken(room, token) {
 }
 
 export async function appendSignal(kv, roomCode, targetPeerId, signal) {
-  const key = signalKey(roomCode, targetPeerId);
-  const existing = (await kvGetJson(kv, key)) ?? [];
-  existing.push({
+  const envelope = {
     id: createToken("sig"),
     roomCode,
     createdAt: now(),
     ...signal,
-  });
+  };
+
+  if (typeof kv.list === "function") {
+    await kvPutJson(kv, signalItemKey(roomCode, targetPeerId, envelope), envelope, SIGNAL_TTL_SECONDS);
+    return;
+  }
+
+  const key = signalKey(roomCode, targetPeerId);
+  const existing = (await kvGetJson(kv, key)) ?? [];
+  existing.push(envelope);
   await kvPutJson(kv, key, existing.slice(-80), SIGNAL_TTL_SECONDS);
 }
 
 export async function drainSignals(kv, roomCode, peerId) {
   const key = signalKey(roomCode, peerId);
-  const signals = (await kvGetJson(kv, key)) ?? [];
+  const legacySignals = (await kvGetJson(kv, key)) ?? [];
   await kv.delete(key);
-  return signals;
+
+  if (typeof kv.list !== "function") {
+    return legacySignals;
+  }
+
+  const keys = await listKvKeys(kv, signalPrefix(roomCode, peerId));
+  const signalEntries = await Promise.all(
+    keys.map(async (signalStorageKey) => ({
+      key: signalStorageKey,
+      signal: await kvGetJson(kv, signalStorageKey),
+    })),
+  );
+  await Promise.all(keys.map((signalStorageKey) => kv.delete(signalStorageKey)));
+
+  return [...legacySignals, ...signalEntries.map((entry) => entry.signal).filter(Boolean)]
+    .sort((left, right) => (left.createdAt ?? 0) - (right.createdAt ?? 0))
+    .slice(-80);
 }
 
 export { ROOM_TTL_SECONDS, SIGNAL_TTL_SECONDS };
