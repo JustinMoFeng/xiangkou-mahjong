@@ -1,11 +1,49 @@
-const CACHE_NAME = "xiangkou-mahjong-v3";
+const CACHE_NAME = "xiangkou-mahjong-v4";
 const SCOPE_PATH = new URL(self.registration.scope).pathname;
 const scopedPath = (path) => `${SCOPE_PATH}${path}`.replace(/\/{2,}/g, "/");
+const TILE_ASSET_NAMES = [
+  "back",
+  "m1",
+  "m2",
+  "m3",
+  "m4",
+  "m5",
+  "m6",
+  "m7",
+  "m8",
+  "m9",
+  "p1",
+  "p2",
+  "p3",
+  "p4",
+  "p5",
+  "p6",
+  "p7",
+  "p8",
+  "p9",
+  "s1",
+  "s2",
+  "s3",
+  "s4",
+  "s5",
+  "s6",
+  "s7",
+  "s8",
+  "s9",
+  "east",
+  "south",
+  "west",
+  "north",
+  "red",
+  "green",
+  "white",
+];
 const CORE_ASSETS = [
   scopedPath(""),
   scopedPath("index.html"),
   scopedPath("manifest.webmanifest"),
   scopedPath("icons/icon.svg"),
+  ...TILE_ASSET_NAMES.map((name) => scopedPath(`tiles/${name}.svg`)),
 ];
 
 self.addEventListener("install", (event) => {

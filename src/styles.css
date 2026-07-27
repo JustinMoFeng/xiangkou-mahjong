@@ -528,6 +528,9 @@ button:disabled {
 .claim-option__tiles img {
   width: 18px;
   height: 25px;
+  border-radius: 3px;
+  background:
+    linear-gradient(180deg, #fffef6 0%, #fbf4e2 100%);
   object-fit: contain;
   filter: drop-shadow(0 3px 3px rgba(0, 0, 0, 0.18));
 }
@@ -587,6 +590,20 @@ button:disabled {
     opacity 160ms ease;
 }
 
+.tile-face::before {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border: 1px solid rgba(212, 193, 155, 0.85);
+  border-radius: 10px;
+  background:
+    linear-gradient(180deg, #fffef6 0%, #fbf4e2 100%);
+  box-shadow:
+    3px 4px 0 #1c5c45,
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  content: "";
+}
+
 .tile-face--compact {
   width: 30px;
   height: 42px;
@@ -611,6 +628,8 @@ button:disabled {
 }
 
 .tile-face__image {
+  position: relative;
+  z-index: 1;
   display: block;
   width: 100%;
   height: 100%;

@@ -299,7 +299,7 @@ export default function LinkMatchApp({ onBackHome }: { onBackHome: () => void })
                     data-col={tile.col}
                     data-code={tile.code}
                   >
-                    <img src={tileAssetPath(tile.code)} alt="" draggable={false} />
+                    <img src={tileAssetPath(tile.code)} alt="" draggable={false} decoding="async" />
                   </button>
                 ))}
               </div>

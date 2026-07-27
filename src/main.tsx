@@ -1,6 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import Root from "./Root";
+import { preloadTileAssets } from "./game/tileAssets";
 import "./styles.css";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
@@ -8,6 +9,8 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     <Root />
   </React.StrictMode>,
 );
+
+preloadTileAssets();
 
 if ("serviceWorker" in navigator && import.meta.env.PROD) {
   window.addEventListener("load", () => {

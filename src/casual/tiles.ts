@@ -1,3 +1,5 @@
+import { tileAssetPath as sharedTileAssetPath } from "../game/tileAssets";
+
 export type CasualTileCode =
   | "m1"
   | "m2"
@@ -113,7 +115,7 @@ export function tileLabel(code: CasualTileCode): string {
 }
 
 export function tileAssetPath(code: CasualTileCode): string {
-  return `${import.meta.env.BASE_URL}tiles/${code}.svg`;
+  return sharedTileAssetPath(code);
 }
 
 export function createSeededRandom(seed = Date.now()): () => number {
