@@ -41,7 +41,6 @@ type ExitingLine = {
   duration: number;
   exitDistance: number;
   routeLength: number;
-  progress: number;
   startedAt: number;
 };
 
@@ -168,24 +167,17 @@ function pathFromCoords(coords: SvgCoord[]): string {
     .join(" ");
 }
 
-function extractedLineGeometry({
-  points,
-  direction,
-  rows,
-  columns,
+function extractedLineGeometryFromRoute({
+  route,
   progress,
   exitDistance,
   routeLength,
 }: {
-  points: LinePoint[];
-  direction: LineDirection;
-  rows: number;
-  columns: number;
+  route: RouteNode[];
   progress: number;
   exitDistance: number;
   routeLength: number;
 }): { path: string; head: SvgCoord } {
-  const route = createLineRoute(points, direction, rows, columns, exitDistance);
   const pullDistance = (routeLength + exitDistance) * progress;
   const startDistance = Math.max(-exitDistance, -pullDistance);
   const endDistance = Math.max(-exitDistance, routeLength - pullDistance);
@@ -204,6 +196,31 @@ function extractedLineGeometry({
   coords.push(pointAtRouteDistance(route, endDistance));
 
   return { path: pathFromCoords(coords), head };
+}
+
+function extractedLineGeometry({
+  points,
+  direction,
+  rows,
+  columns,
+  progress,
+  exitDistance,
+  routeLength,
+}: {
+  points: LinePoint[];
+  direction: LineDirection;
+  rows: number;
+  columns: number;
+  progress: number;
+  exitDistance: number;
+  routeLength: number;
+}): { path: string; head: SvgCoord } {
+  return extractedLineGeometryFromRoute({
+    route: createLineRoute(points, direction, rows, columns, exitDistance),
+    progress,
+    exitDistance,
+    routeLength,
+  });
 }
 
 function lineExitDuration(points: LinePoint[], routeLength: number, exitDistance: number): number {
@@ -226,6 +243,7 @@ type RenderLineProps = {
   interactive?: boolean;
   onPickLine: (line: ParkingLine) => void;
   onLineKeyDown: (event: KeyboardEvent<SVGGElement>, line: ParkingLine) => void;
+  onExitComplete?: (lineId: string) => void;
 };
 
 const LineToken = memo(function LineToken({
@@ -239,24 +257,82 @@ const LineToken = memo(function LineToken({
   interactive = true,
   onPickLine,
   onLineKeyDown,
+  onExitComplete,
 }: RenderLineProps) {
-  const points = lineCells(line);
-  if (points.length === 0) return null;
+  const points = line.exited ? [] : line.points;
   const isExiting = exiting?.id === line.id;
-  const geometry = isExiting
-    ? extractedLineGeometry({
+  const hitPathRef = useRef<SVGPathElement>(null);
+  const glowPathRef = useRef<SVGPathElement>(null);
+  const visiblePathRef = useRef<SVGPathElement>(null);
+  const arrowRef = useRef<SVGGElement>(null);
+  const angle = arrowAngle(line.direction);
+  const geometry = useMemo(() => {
+    if (points.length === 0) return undefined;
+
+    if (isExiting && exiting) {
+      return extractedLineGeometry({
         points,
         direction: line.direction,
         rows,
         columns,
-        progress: exiting.progress,
+        progress: 0.001,
         exitDistance: exiting.exitDistance,
         routeLength: exiting.routeLength,
-      })
-    : {
-        path: continuousLinePath(points, rows, columns),
-        head: svgPoint(points[0], rows, columns),
-      };
+      });
+    }
+
+    return {
+      path: continuousLinePath(points, rows, columns),
+      head: svgPoint(points[0], rows, columns),
+    };
+  }, [columns, exiting, isExiting, line.direction, points, rows]);
+
+  useEffect(() => {
+    if (!isExiting || !exiting || points.length === 0) return undefined;
+
+    const route = createLineRoute(points, line.direction, rows, columns, exiting.exitDistance);
+    let frameId: number | undefined;
+    let cancelled = false;
+
+    const writeGeometry = (progress: number) => {
+      const nextGeometry = extractedLineGeometryFromRoute({
+        route,
+        progress,
+        exitDistance: exiting.exitDistance,
+        routeLength: exiting.routeLength,
+      });
+      hitPathRef.current?.setAttribute("d", nextGeometry.path);
+      glowPathRef.current?.setAttribute("d", nextGeometry.path);
+      visiblePathRef.current?.setAttribute("d", nextGeometry.path);
+      arrowRef.current?.setAttribute("transform", `translate(${nextGeometry.head.x} ${nextGeometry.head.y}) rotate(${angle})`);
+    };
+
+    const animate = (now: number) => {
+      if (cancelled) return;
+
+      const rawProgress = Math.min(1, Math.max(0, (now - exiting.startedAt) / exiting.duration));
+      writeGeometry(1 - (1 - rawProgress) ** 3);
+
+      if (rawProgress >= 1) {
+        onExitComplete?.(line.id);
+        return;
+      }
+
+      frameId = window.requestAnimationFrame(animate);
+    };
+
+    writeGeometry(0.001);
+    frameId = window.requestAnimationFrame(animate);
+
+    return () => {
+      cancelled = true;
+      if (frameId !== undefined) {
+        window.cancelAnimationFrame(frameId);
+      }
+    };
+  }, [angle, columns, exiting, isExiting, line.direction, line.id, onExitComplete, points, rows]);
+
+  if (!geometry) return null;
 
   return (
     <g
@@ -283,10 +359,10 @@ const LineToken = memo(function LineToken({
       onClick={interactive ? () => onPickLine(line) : undefined}
       onKeyDown={interactive ? (event) => onLineKeyDown(event, line) : undefined}
     >
-      <path className="line-track__hit" d={geometry.path} />
-      <path className="line-track__glow" d={geometry.path} pathLength={1} />
-      <path className="line-track__path" d={geometry.path} pathLength={1} />
-      <g className="line-track__arrow" transform={`translate(${geometry.head.x} ${geometry.head.y}) rotate(${arrowAngle(line.direction)})`}>
+      <path ref={hitPathRef} className="line-track__hit" d={geometry.path} />
+      <path ref={glowPathRef} className="line-track__glow" d={geometry.path} pathLength={1} />
+      <path ref={visiblePathRef} className="line-track__path" d={geometry.path} pathLength={1} />
+      <g ref={arrowRef} className="line-track__arrow" transform={`translate(${geometry.head.x} ${geometry.head.y}) rotate(${angle})`}>
         <path className="line-track__arrow-head" d={LINE_ARROW_PATH} />
       </g>
     </g>
@@ -314,6 +390,10 @@ function boardCells(state: ParkingGameState): LinePoint[] {
     }
   }
   return cells;
+}
+
+function boardGridPath(cells: LinePoint[]): string {
+  return cells.map((cell) => `M${cell.col + 0.08} ${cell.row + 0.08}h0.84v0.84h-0.84Z`).join("");
 }
 
 type InitialParkingData = {
@@ -358,10 +438,14 @@ export default function ParkingApp({ onBackHome }: { onBackHome: () => void }) {
   const [state, setState] = useState<ParkingGameState>(() => initialDataRef.current!.state);
   const [selectedLevel, setSelectedLevel] = useState<LineLevelPreset | undefined>(() => initialDataRef.current!.selectedLevel);
   const [exitingLines, setExitingLines] = useState<ExitingLine[]>([]);
-  const exitFrameRef = useRef<number>();
-  const stateMatchesLevel = isStateCurrentLevel(state);
+  const stateCellCount = state.cells?.length ?? state.rows * state.columns;
+  const stateMatchesLevel = useMemo(
+    () => isStateCurrentLevel(state),
+    [state.levelId, state.seed, state.endlessRound, state.rows, state.columns, stateCellCount, state.lines.length],
+  );
   const readyIds = useMemo(() => new Set(getExitReadyLineIds(state)), [state]);
   const cells = useMemo(() => boardCells(state), [state]);
+  const gridPath = useMemo(() => boardGridPath(cells), [cells]);
   const stateRef = useRef(state);
   const readyIdsRef = useRef(readyIds);
   const exitingLinesRef = useRef(exitingLines);
@@ -373,10 +457,6 @@ export default function ParkingApp({ onBackHome }: { onBackHome: () => void }) {
   exitingLinesRef.current = exitingLines;
 
   function clearExitAnimation() {
-    if (exitFrameRef.current !== undefined) {
-      window.cancelAnimationFrame(exitFrameRef.current);
-      exitFrameRef.current = undefined;
-    }
     exitingLinesRef.current = [];
   }
 
@@ -396,53 +476,6 @@ export default function ParkingApp({ onBackHome }: { onBackHome: () => void }) {
       setBest(saveParkingBest(state.levelId, state.moves));
     }
   }, [selectedLevel, state, stateMatchesLevel]);
-
-  useEffect(() => {
-    if (exitingLines.length === 0) {
-      if (exitFrameRef.current !== undefined) {
-        window.cancelAnimationFrame(exitFrameRef.current);
-        exitFrameRef.current = undefined;
-      }
-      return undefined;
-    }
-
-    const animate = (now: number) => {
-      const next = exitingLinesRef.current.flatMap((item) => {
-        const rawProgress = Math.min(1, Math.max(0, (now - item.startedAt) / item.duration));
-        if (rawProgress >= 1) {
-          return [];
-        }
-
-        return [
-          {
-            ...item,
-            progress: 1 - (1 - rawProgress) ** 3,
-          },
-        ];
-      });
-
-      exitingLinesRef.current = next;
-      setExitingLines(next);
-
-      if (next.length > 0) {
-        exitFrameRef.current = window.requestAnimationFrame(animate);
-        return;
-      }
-
-      exitFrameRef.current = undefined;
-    };
-
-    if (exitFrameRef.current === undefined) {
-      exitFrameRef.current = window.requestAnimationFrame(animate);
-    }
-
-    return () => {
-      if (exitFrameRef.current !== undefined) {
-        window.cancelAnimationFrame(exitFrameRef.current);
-        exitFrameRef.current = undefined;
-      }
-    };
-  }, [exitingLines.length]);
 
   useEffect(() => () => clearExitAnimation(), []);
 
@@ -515,7 +548,6 @@ export default function ParkingApp({ onBackHome }: { onBackHome: () => void }) {
       duration,
       exitDistance,
       routeLength,
-      progress: 0.001,
       startedAt: performance.now(),
     };
     stateRef.current = nextState;
@@ -524,6 +556,14 @@ export default function ParkingApp({ onBackHome }: { onBackHome: () => void }) {
     const nextExitingLines = [...exitingLinesRef.current, nextExiting];
     exitingLinesRef.current = nextExitingLines;
     setExitingLines(nextExitingLines);
+  }, []);
+
+  const onExitAnimationComplete = useCallback((lineId: string) => {
+    setExitingLines((current) => {
+      const next = current.filter((item) => item.id !== lineId);
+      exitingLinesRef.current = next;
+      return next;
+    });
   }, []);
 
   const onLineKeyDown = useCallback((event: KeyboardEvent<SVGGElement>, line: ParkingLine) => {
@@ -595,9 +635,7 @@ export default function ParkingApp({ onBackHome }: { onBackHome: () => void }) {
               aria-label={`${state.levelName} 线阵`}
             >
               <g className="line-grid" aria-hidden="true">
-                {cells.map((cell) => (
-                  <rect key={`${cell.row}:${cell.col}`} x={cell.col + 0.08} y={cell.row + 0.08} width={0.84} height={0.84} rx={0.06} />
-                ))}
+                <path className="line-grid__cells" d={gridPath} />
               </g>
               {state.lines
                 .filter((line) => !exitingLines.some((item) => item.id === line.id))
@@ -626,6 +664,7 @@ export default function ParkingApp({ onBackHome }: { onBackHome: () => void }) {
                   interactive={false}
                   onPickLine={onPick}
                   onLineKeyDown={onLineKeyDown}
+                  onExitComplete={onExitAnimationComplete}
                 />
               ))}
             </svg>

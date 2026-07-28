@@ -402,7 +402,7 @@
   pointer-events: none;
 }
 
-.line-grid rect {
+.line-grid__cells {
   fill: rgba(255, 247, 227, 0.026);
   stroke: rgba(255, 247, 227, 0.045);
   stroke-width: 0.025;
@@ -500,7 +500,7 @@
 
 .line-track.is-exiting .line-track__path,
 .line-track.is-exiting .line-track__arrow {
-  filter: drop-shadow(0 0 4px rgba(255, 232, 166, 0.24));
+  filter: none;
 }
 
 .parking-toolbar {
