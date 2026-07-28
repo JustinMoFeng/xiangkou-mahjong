@@ -1,8 +1,8 @@
-import { ArrowLeft, Bot, ChevronRight, Grid3X3, Layers3, Plus, Sparkles, Users } from "lucide-react";
+import { ArrowLeft, Bot, ChevronRight, Grid3X3, Layers3, Plus, Route, Sparkles, Users } from "lucide-react";
 import { FormEvent, useState } from "react";
 import { normalizeRoomCode } from "./online/signaling";
 
-export type GameMode = "xiangkou" | "sichuan" | "link-match" | "yangyang";
+export type GameMode = "xiangkou" | "sichuan" | "link-match" | "yangyang" | "parking";
 
 export default function Home({ onSelect }: { onSelect: (mode: GameMode) => void }) {
   return (
@@ -15,8 +15,8 @@ export default function Home({ onSelect }: { onSelect: (mode: GameMode) => void 
         </header>
 
         <div className="home-sections">
-          <section className="home-section" aria-label="牌桌麻将">
-            <h2>牌桌麻将</h2>
+          <section className="home-section" aria-label="麻将">
+            <h2>麻将</h2>
             <div className="home-modes">
               <button className="home-card home-card--classic" onClick={() => onSelect("xiangkou")} aria-label="选择巷口麻将">
                 <div className="home-card__icon">
@@ -42,8 +42,8 @@ export default function Home({ onSelect }: { onSelect: (mode: GameMode) => void 
             </div>
           </section>
 
-          <section className="home-section" aria-label="休闲消除">
-            <h2>休闲消除</h2>
+          <section className="home-section" aria-label="麻将小游戏">
+            <h2>麻将小游戏</h2>
             <div className="home-modes">
               <button className="home-card home-card--link" onClick={() => onSelect("link-match")} aria-label="开始麻将连连看">
                 <div className="home-card__icon">
@@ -68,9 +68,25 @@ export default function Home({ onSelect }: { onSelect: (mode: GameMode) => void 
               </button>
             </div>
           </section>
+
+          <section className="home-section" aria-label="休闲小游戏">
+            <h2>休闲小游戏</h2>
+            <div className="home-modes home-modes--compact">
+              <button className="home-card home-card--parking" onClick={() => onSelect("parking")} aria-label="开始线阵清场">
+                <div className="home-card__icon">
+                  <Route size={28} />
+                </div>
+                <div className="home-card__body">
+                  <h3>线阵清场</h3>
+                  <p>点击箭头方向无阻的深色折线，让整条线从面板中抽离。</p>
+                </div>
+                <ChevronRight className="home-card__go" size={22} />
+              </button>
+            </div>
+          </section>
         </div>
 
-        <footer className="home-footer">牌桌进度保存在本机浏览器，休闲关卡当前局内即时游玩。</footer>
+        <footer className="home-footer">麻将牌桌保存在本机浏览器，小游戏关卡按玩法记录进度和最好成绩。</footer>
       </section>
     </main>
   );

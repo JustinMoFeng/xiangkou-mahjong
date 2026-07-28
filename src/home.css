@@ -13,7 +13,7 @@
 }
 
 .home-frame {
-  width: min(980px, 100%);
+  width: min(1040px, 100%);
   padding: clamp(16px, 3vw, 28px);
   border: 1px solid rgba(215, 163, 72, 0.34);
   border-radius: 8px;
@@ -73,6 +73,10 @@
   gap: clamp(10px, 2vw, 16px);
 }
 
+.home-modes--compact {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .home-sections {
   display: grid;
   gap: clamp(12px, 2vw, 18px);
@@ -98,8 +102,8 @@
   grid-template-rows: auto 1fr auto;
   gap: 12px;
   align-items: start;
-  min-height: clamp(210px, 26vw, 260px);
-  padding: clamp(14px, 2.4vw, 20px);
+  min-height: clamp(142px, 18vw, 190px);
+  padding: clamp(12px, 2vw, 16px);
   overflow: hidden;
   border: 1px solid rgba(255, 247, 227, 0.14);
   border-radius: 8px;
@@ -150,6 +154,10 @@
   background: linear-gradient(135deg, rgba(169, 92, 28, 0.54), rgba(73, 40, 12, 0.72));
 }
 
+.home-card--parking {
+  background: linear-gradient(135deg, rgba(88, 105, 91, 0.58), rgba(32, 43, 36, 0.76));
+}
+
 .home-card--locked {
   cursor: not-allowed;
   opacity: 0.72;
@@ -192,7 +200,7 @@
 .home-card__body h3 {
   margin: 0 0 6px;
   color: #fff4da;
-  font-size: clamp(1.4rem, 3vw, 2rem);
+  font-size: clamp(1.16rem, 2.4vw, 1.55rem);
   font-weight: 900;
 }
 

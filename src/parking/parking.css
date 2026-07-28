@@ -1,0 +1,748 @@
+.parking-shell {
+  min-height: 100svh;
+  padding: clamp(8px, 1.4vw, 16px);
+  color: #f6efe1;
+  background:
+    radial-gradient(circle at 18% 12%, rgba(215, 163, 72, 0.18), transparent 28%),
+    radial-gradient(circle at 84% 88%, rgba(150, 24, 20, 0.18), transparent 30%),
+    linear-gradient(140deg, #0c1611 0%, #162820 46%, #0b1110 100%);
+  font-family: "Songti SC", "Noto Serif SC", "PingFang SC", "Microsoft YaHei", serif;
+}
+
+.parking-frame {
+  --line-ink: #f7e7bc;
+  --line-warning: #f08d68;
+  position: relative;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: clamp(8px, 1.4vw, 12px);
+  width: min(1180px, 100%);
+  height: calc(100svh - clamp(16px, 2.8vw, 32px));
+  min-height: 560px;
+  margin: 0 auto;
+  padding: clamp(8px, 1.5vw, 12px);
+  border: 1px solid rgba(215, 163, 72, 0.34);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(255, 247, 227, 0.09), transparent 30%),
+    repeating-linear-gradient(35deg, rgba(255, 247, 227, 0.018) 0 1px, transparent 1px 6px),
+    radial-gradient(circle at 50% 42%, rgba(20, 82, 62, 0.9), rgba(8, 35, 27, 0.96) 72%);
+  box-shadow:
+    0 28px 80px rgba(0, 0, 0, 0.4),
+    inset 0 0 0 5px rgba(4, 31, 22, 0.28);
+  overflow: hidden;
+}
+
+.parking-level-select {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: clamp(8px, 1.2vw, 12px);
+  width: min(1120px, 100%);
+  height: calc(100dvh - clamp(12px, 2.4vw, 28px));
+  min-height: 520px;
+  margin: 0 auto;
+  padding: clamp(9px, 1.4vw, 16px);
+  overflow: hidden;
+  border: 1px solid rgba(215, 163, 72, 0.34);
+  border-radius: 8px;
+  background:
+    repeating-linear-gradient(35deg, rgba(255, 247, 227, 0.018) 0 1px, transparent 1px 6px),
+    radial-gradient(circle at 46% 48%, rgba(20, 98, 70, 0.88), rgba(7, 34, 26, 0.98) 72%);
+  box-shadow:
+    0 28px 80px rgba(0, 0, 0, 0.38),
+    inset 0 0 0 5px rgba(4, 31, 22, 0.26);
+}
+
+.parking-level-select__top {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 247, 227, 0.13);
+}
+
+.parking-level-select__top p {
+  margin: 0 0 2px;
+  color: rgba(246, 239, 225, 0.64);
+  font-size: 0.74rem;
+}
+
+.parking-level-select__top h1 {
+  margin: 0;
+  color: #fff4da;
+  font-size: clamp(1.24rem, 2.8vw, 1.9rem);
+  line-height: 1.05;
+}
+
+.parking-level-select__top span {
+  display: block;
+  margin-top: 4px;
+  color: rgba(246, 239, 225, 0.66);
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
+.parking-level-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  align-content: start;
+  min-height: 0;
+  overflow: auto;
+  padding: 1px 4px 8px 1px;
+  scrollbar-color: rgba(215, 163, 72, 0.42) transparent;
+}
+
+.parking-level-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+  gap: 4px 8px;
+  min-height: 130px;
+  padding: 11px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 247, 227, 0.16);
+  border-radius: 8px;
+  color: #fff4da;
+  background:
+    linear-gradient(130deg, rgba(255, 247, 227, 0.08), rgba(255, 247, 227, 0.02)),
+    rgba(5, 23, 17, 0.62);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    transform 150ms ease,
+    border-color 150ms ease,
+    background-color 150ms ease;
+}
+
+.parking-level-card:hover,
+.parking-level-card:focus-visible {
+  transform: translateY(-2px);
+  border-color: rgba(255, 216, 137, 0.5);
+  background:
+    linear-gradient(130deg, rgba(255, 216, 137, 0.12), rgba(255, 247, 227, 0.03)),
+    rgba(7, 33, 24, 0.72);
+  outline: none;
+}
+
+.parking-level-card--endless {
+  border-color: rgba(227, 91, 67, 0.34);
+  background:
+    radial-gradient(circle at 92% 10%, rgba(227, 91, 67, 0.16), transparent 30%),
+    linear-gradient(130deg, rgba(255, 247, 227, 0.08), rgba(255, 247, 227, 0.02)),
+    rgba(5, 23, 17, 0.62);
+}
+
+.parking-level-card__difficulty {
+  grid-column: 1;
+  width: fit-content;
+  padding: 2px 7px;
+  border: 1px solid rgba(255, 216, 137, 0.3);
+  border-radius: 999px;
+  color: #ffd889;
+  background: rgba(215, 163, 72, 0.1);
+  font-size: 0.66rem;
+  font-weight: 900;
+}
+
+.parking-level-card strong {
+  grid-column: 1;
+  color: #fff4da;
+  font-size: 1.08rem;
+  letter-spacing: 0;
+  line-height: 1.08;
+}
+
+.parking-level-card small {
+  grid-column: 1;
+  color: rgba(246, 239, 225, 0.62);
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.parking-level-card p {
+  grid-column: 1 / -1;
+  margin: 4px 0 0;
+  color: rgba(246, 239, 225, 0.72);
+  font-size: 0.74rem;
+  line-height: 1.42;
+}
+
+.parking-level-card__meta {
+  grid-column: 1 / -1;
+  align-self: end;
+  color: rgba(255, 216, 137, 0.86);
+  font-size: 0.7rem;
+  font-weight: 900;
+  line-height: 1.35;
+}
+
+.parking-level-card svg {
+  color: rgba(255, 216, 137, 0.82);
+}
+
+.parking-level-card > svg:first-of-type {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.parking-level-card > svg:last-of-type {
+  grid-column: 3;
+  grid-row: 1;
+}
+
+.parking-topbar {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+  padding: 0 2px 9px;
+  border-bottom: 1px solid rgba(255, 247, 227, 0.13);
+}
+
+.parking-back,
+.parking-primary,
+.parking-secondary,
+.parking-round,
+.parking-level-change,
+.parking-level-tabs button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 247, 227, 0.16);
+  border-radius: 8px;
+  color: #fff7e3;
+  background: rgba(255, 247, 227, 0.08);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 800;
+}
+
+.parking-back {
+  width: 36px;
+  min-height: 34px;
+  padding: 0;
+}
+
+.parking-back:hover,
+.parking-secondary:hover,
+.parking-round:hover,
+.parking-level-change:hover,
+.parking-level-tabs button:hover {
+  border-color: rgba(255, 216, 137, 0.68);
+  background: rgba(215, 163, 72, 0.14);
+}
+
+.parking-title {
+  min-width: 0;
+}
+
+.parking-title p,
+.parking-result p {
+  margin: 0;
+  color: rgba(246, 239, 225, 0.62);
+  font-size: 0.74rem;
+}
+
+.parking-title h1,
+.parking-result h2 {
+  margin: 0;
+  color: #fff4da;
+  letter-spacing: 0;
+}
+
+.parking-title h1 {
+  overflow: hidden;
+  font-size: clamp(1.15rem, 2.2vw, 1.75rem);
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.parking-stats {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.parking-stats span,
+.parking-ready-pill {
+  min-height: 28px;
+  padding: 5px 9px;
+  border: 1px solid rgba(255, 247, 227, 0.14);
+  border-radius: 8px;
+  color: #ffe2a6;
+  background: rgba(0, 0, 0, 0.2);
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.parking-play {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: clamp(8px, 1.2vw, 12px);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.parking-hud {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+}
+
+.parking-level-tabs {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.parking-level-tabs button {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  color: rgba(246, 239, 225, 0.78);
+  font-size: 0.8rem;
+}
+
+.parking-level-tabs button.is-active {
+  border-color: rgba(255, 216, 137, 0.72);
+  color: #20160c;
+  background: linear-gradient(180deg, #ffd47c, #c9892e);
+}
+
+.parking-level-change {
+  min-height: 32px;
+  padding: 0 10px;
+  color: rgba(246, 239, 225, 0.8);
+  font-size: 0.76rem;
+}
+
+.parking-level-name {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  overflow: hidden;
+  margin: 0;
+  color: rgba(246, 239, 225, 0.7);
+  font-size: 0.82rem;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.parking-level-name span {
+  color: rgba(255, 216, 137, 0.72);
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.parking-ready-pill {
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.parking-ready-pill span {
+  color: rgba(245, 240, 231, 0.62);
+  font-size: 0.68rem;
+  line-height: 1;
+}
+
+.parking-ready-pill strong {
+  overflow: hidden;
+  color: #ffd889;
+  font-size: 0.82rem;
+  line-height: 1.05;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.parking-board {
+  --board-padding: clamp(10px, 1.8vw, 18px);
+  position: relative;
+  align-self: center;
+  justify-self: center;
+  aspect-ratio: var(--columns) / var(--rows);
+  width: min(100%, calc((100svh - 260px) * var(--columns) / var(--rows)));
+  max-height: 100%;
+  min-width: 0;
+  margin: 0 auto;
+  padding: var(--board-padding);
+  border: 1px solid rgba(215, 163, 72, 0.28);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(255, 247, 227, 0.04), transparent 32%),
+    radial-gradient(circle at 50% 45%, rgba(28, 91, 68, 0.9), rgba(6, 31, 23, 0.98) 72%);
+  box-shadow:
+    inset 0 0 64px rgba(0, 0, 0, 0.18),
+    0 14px 28px rgba(0, 0, 0, 0.22);
+  overflow: hidden;
+}
+
+.line-layer {
+  position: absolute;
+  inset: var(--board-padding);
+  z-index: 2;
+  overflow: visible;
+  pointer-events: auto;
+}
+
+.line-grid {
+  pointer-events: none;
+}
+
+.line-grid rect {
+  fill: rgba(255, 247, 227, 0.026);
+  stroke: rgba(255, 247, 227, 0.045);
+  stroke-width: 0.025;
+}
+
+.line-track {
+  --line-color: var(--line-ink);
+  cursor: pointer;
+  outline: none;
+  transition:
+    filter 160ms ease,
+    opacity 160ms ease;
+}
+
+.line-track__hit,
+.line-track__glow,
+.line-track__path {
+  fill: none;
+  stroke-linecap: butt;
+  stroke-linejoin: miter;
+}
+
+.line-track__hit {
+  stroke: rgba(255, 232, 166, 0.001);
+  stroke-width: 0.58;
+  pointer-events: stroke;
+}
+
+.line-track__glow {
+  stroke: rgba(255, 247, 227, 0.18);
+  stroke-width: 0.38;
+  opacity: 0.8;
+  pointer-events: none;
+}
+
+.line-track__path {
+  stroke: var(--line-color);
+  stroke-width: 0.17;
+  opacity: 1;
+  pointer-events: none;
+}
+
+.line-track__arrow {
+  fill: var(--line-color);
+  opacity: 1;
+  pointer-events: none;
+  filter: none;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.line-track__arrow-head {
+  pointer-events: visiblePainted;
+}
+
+.line-track.is-ready .line-track__hit {
+  stroke-width: 0.64;
+}
+
+.line-track:hover .line-track__path,
+.line-track:focus-visible .line-track__path {
+  stroke-width: 0.23;
+}
+
+.line-track:focus-visible .line-track__hit {
+  stroke: rgba(255, 216, 137, 0.28);
+}
+
+.line-track.is-hinted .line-track__path {
+  animation: parking-hint-line 980ms ease-in-out infinite;
+}
+
+.line-track.is-hinted .line-track__glow {
+  stroke: rgba(255, 216, 137, 0.42);
+  opacity: 1;
+  animation: parking-hint-glow 980ms ease-in-out infinite;
+}
+
+.line-track.is-blocked {
+  --line-color: var(--line-warning);
+  animation: parking-blocked 280ms ease-in-out;
+}
+
+.line-track.is-exiting {
+  pointer-events: none;
+}
+
+.line-track.is-exiting .line-track__hit {
+  pointer-events: none;
+}
+
+.line-track.is-exiting .line-track__glow {
+  opacity: 0.34;
+}
+
+.line-track.is-exiting .line-track__path,
+.line-track.is-exiting .line-track__arrow {
+  filter: drop-shadow(0 0 4px rgba(255, 232, 166, 0.24));
+}
+
+.parking-toolbar {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) 40px;
+  gap: 10px;
+  align-items: center;
+  min-height: 0;
+  padding: 0;
+  background: transparent;
+}
+
+.parking-round {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 999px;
+  color: #ffd889;
+}
+
+.parking-round:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.parking-progress__bar {
+  height: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 247, 227, 0.16);
+  border-radius: 999px;
+  background: rgba(4, 18, 13, 0.54);
+}
+
+.parking-progress__bar span {
+  display: block;
+  height: 100%;
+  min-width: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #ffd47c, #c9892e);
+  transition: width 220ms ease;
+}
+
+.parking-primary,
+.parking-secondary {
+  min-height: 40px;
+  padding: 0 16px;
+  font-size: 0.82rem;
+}
+
+.parking-primary {
+  border-color: rgba(215, 163, 72, 0.72);
+  color: #20160c;
+  background: linear-gradient(180deg, #ffd47c, #c9892e);
+}
+
+.parking-result {
+  position: absolute;
+  z-index: 20;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.46);
+  backdrop-filter: blur(4px);
+}
+
+.parking-result section {
+  display: grid;
+  gap: 12px;
+  justify-items: center;
+  width: min(360px, calc(100% - 28px));
+  padding: 20px;
+  border: 1px solid rgba(255, 216, 137, 0.42);
+  border-radius: 8px;
+  color: #f5f0e7;
+  background: rgba(6, 28, 20, 0.94);
+  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.4);
+}
+
+.parking-result svg {
+  color: #ffd889;
+}
+
+.parking-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+@keyframes parking-blocked {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  33% {
+    transform: translateX(-4px);
+  }
+  66% {
+    transform: translateX(4px);
+  }
+}
+
+@keyframes parking-hint-line {
+  0%,
+  100% {
+    stroke-width: 0.17;
+  }
+  50% {
+    stroke-width: 0.25;
+  }
+}
+
+@keyframes parking-hint-glow {
+  0%,
+  100% {
+    opacity: 0.42;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (max-width: 700px) {
+  .parking-level-select {
+    height: calc(100dvh - 12px);
+    min-height: 0;
+    padding: 8px;
+  }
+
+  .parking-level-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .parking-level-card {
+    min-height: 122px;
+  }
+
+  .parking-frame {
+    height: calc(100svh - 12px);
+    min-height: 0;
+    padding: 8px;
+  }
+
+  .parking-topbar {
+    grid-template-columns: 38px minmax(0, 1fr);
+  }
+
+  .parking-stats {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+
+  .parking-hud {
+    grid-template-columns: minmax(92px, auto) minmax(0, 1fr);
+  }
+
+  .parking-ready-pill {
+    grid-column: 1 / -1;
+    justify-self: stretch;
+  }
+
+  .parking-level-name {
+    justify-self: end;
+    font-size: 0.76rem;
+  }
+
+  .parking-board {
+    width: min(100%, calc((100svh - 260px) * var(--columns) / var(--rows)));
+  }
+}
+
+@media (orientation: landscape) and (max-height: 560px) {
+  .parking-shell {
+    padding: 4px;
+  }
+
+  .parking-level-select {
+    height: calc(100dvh - 8px);
+    min-height: 0;
+    gap: 5px;
+    padding: 6px;
+  }
+
+  .parking-level-select__top {
+    padding-bottom: 5px;
+  }
+
+  .parking-level-select__top h1 {
+    font-size: 1rem;
+  }
+
+  .parking-level-select__top span {
+    display: none;
+  }
+
+  .parking-level-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 7px;
+  }
+
+  .parking-level-card {
+    min-height: 104px;
+    padding: 8px;
+  }
+
+  .parking-frame {
+    height: calc(100svh - 8px);
+    min-height: 0;
+    gap: 5px;
+    padding: 6px;
+  }
+
+  .parking-topbar {
+    padding: 0 4px 5px;
+  }
+
+  .parking-title p {
+    display: none;
+  }
+
+  .parking-title h1 {
+    font-size: 1rem;
+  }
+
+  .parking-stats span,
+  .parking-ready-pill {
+    min-height: 24px;
+    padding: 3px 7px;
+    font-size: 0.62rem;
+  }
+
+  .parking-hud {
+    grid-template-columns: auto minmax(90px, 1fr) auto;
+    gap: 6px;
+  }
+
+  .parking-level-tabs button {
+    width: 28px;
+    height: 28px;
+  }
+
+  .parking-board {
+    width: min(100%, calc((100svh - 128px) * var(--columns) / var(--rows)));
+  }
+}
