@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   arrangeHand,
   canSeatAddedKong,
+  canSeatConcealedKong,
   canSeatSelfWin,
   claimMeld,
   claimSelfDraw,
@@ -14,6 +15,7 @@ import {
   createNextRound,
   createRiverLayoutScenario,
   DEFAULT_PLAYER_NAMES,
+  declareConcealedKong,
   declareAddedKong,
   normalizePlayerNames,
   discardTile,
@@ -22,10 +24,9 @@ import {
   playBotTurnStep,
 } from "./game/engine";
 import { getAudioEvents, MahjongAudio } from "./game/audio";
-import { checkStandardWin } from "./game/rules";
 import { clearSavedGame, loadSavedGame, loadTableProfile, saveGame, saveTableProfile } from "./game/storage";
 import { sortTiles, tileAssetPath, tileColorClass } from "./game/tiles";
-import type { ClaimOption, GameState, Meld, Player, PlayerNames, Seat, SeatType, Tile } from "./game/types";
+import type { ClaimOption, GameState, Meld, Player, PlayerNames, ScoreDetail, Seat, SeatType, Tile, WinPattern } from "./game/types";
 import { applyHostPlayerAction } from "./online/gameActions";
 import type { OnlineConnectionState, PlayerAction } from "./online/protocol";
 
@@ -37,6 +38,12 @@ const windLabels = {
 };
 
 const relationLabels = ["本家", "下家", "对家", "上家"] as const;
+
+function formatScoreDetail(detail: ScoreDetail): string {
+  if (detail.operation === "multiply") return `${detail.name} x${detail.multiplier}`;
+  if (detail.operation === "cap") return `${detail.name} ${detail.multiplier} 倍`;
+  return `${detail.name} +${detail.multiplier}`;
+}
 
 function seatOffset(seat: Seat, perspectiveSeat: Seat): number {
   return (seat - perspectiveSeat + 4) % 4;
@@ -95,6 +102,11 @@ function App({ onBackHome, online }: { onBackHome?: () => void; online?: OnlineT
   const human = state.players[localSeat];
   const localCanSelfWin = canSeatSelfWin(state, localSeat);
   const addedKongCodes = canSeatAddedKong(state, localSeat);
+  const concealedKongCodes = canSeatConcealedKong(state, localSeat);
+  const kongOptions = [
+    ...concealedKongCodes.map((code) => ({ code, kind: "concealed" as const })),
+    ...addedKongCodes.map((code) => ({ code, kind: "added" as const })),
+  ];
   const humanPendingClaim = state.pendingClaim?.seat === localSeat ? state.pendingClaim : undefined;
   const currentPlayer = state.players[state.currentSeat];
   const canOperateLocally = !isOnline || online?.role === "host";
@@ -313,11 +325,11 @@ function App({ onBackHome, online }: { onBackHome?: () => void; online?: OnlineT
   }
 
   function onKong() {
-    const code = addedKongCodes[0];
-    if (!code) {
+    const option = kongOptions[0];
+    if (!option) {
       return;
     }
-    dispatchLocalAction({ type: "kong", seat: localSeat, code });
+    dispatchLocalAction({ type: "kong", seat: localSeat, code: option.code, kind: option.kind });
   }
 
   function dispatchLocalAction(action: PlayerAction) {
@@ -341,7 +353,9 @@ function App({ onBackHome, online }: { onBackHome?: () => void; online?: OnlineT
         case "selfDraw":
           return claimSelfDraw(current, action.seat);
         case "kong":
-          return declareAddedKong(current, action.seat, action.code);
+          return action.kind === "concealed"
+            ? declareConcealedKong(current, action.seat, action.code)
+            : declareAddedKong(current, action.seat, action.code);
       }
     });
   }
@@ -405,7 +419,12 @@ function App({ onBackHome, online }: { onBackHome?: () => void; online?: OnlineT
           <section className={`human-area ${state.currentSeat === localSeat ? "is-active" : ""}`} aria-label="你的手牌">
             <PlayerStatus player={human} perspectiveSeat={localSeat} active={state.currentSeat === localSeat} />
             <div className="hand-row">
-              <MeldRow melds={human.melds} />
+              {human.flowers.length > 0 || human.melds.length > 0 ? (
+                <div className="human-public-sets" aria-label="你的公开牌">
+                  <FlowerRow flowers={human.flowers} />
+                  <MeldRow melds={human.melds} />
+                </div>
+              ) : null}
               {human.hand.map((tile) => (
                 <button
                   key={tile.id}
@@ -451,7 +470,7 @@ function App({ onBackHome, online }: { onBackHome?: () => void; online?: OnlineT
                 <button className="secondary-command" disabled>
                   碰
                 </button>
-                <button className="secondary-command" disabled={addedKongCodes.length === 0} onClick={onKong}>
+                <button className="secondary-command" disabled={kongOptions.length === 0} onClick={onKong}>
                   杠
                 </button>
               </>
@@ -574,7 +593,10 @@ function TableSeat({
     >
       <PlayerStatus player={player} perspectiveSeat={perspectiveSeat} active={active} />
       <div className="table-seat__rack">
-        <MeldRow melds={player.melds} compact />
+        <div className="public-sets public-sets--compact" aria-label={`${player.name}公开牌`}>
+          <FlowerRow flowers={player.flowers} compact />
+          <MeldRow melds={player.melds} compact />
+        </div>
         <div className="concealed-hand" aria-label={`${player.name}手牌`}>
           {player.hand.map((tile) => (
             <span key={tile.id} className="tile-back" />
@@ -639,9 +661,24 @@ function PlayerStatus({ player, perspectiveSeat, active }: { player: Player; per
   );
 }
 
+function FlowerRow({ flowers, compact = false }: { flowers: Tile[]; compact?: boolean }) {
+  if (!flowers || flowers.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className={`flower-row ${compact ? "flower-row--compact" : ""}`} aria-label="花牌">
+      <span className="flower-label">花</span>
+      {flowers.map((tile) => (
+        <TileFace key={tile.id} tile={tile} compact={compact} />
+      ))}
+    </div>
+  );
+}
+
 function MeldRow({ melds, compact = false }: { melds: Meld[]; compact?: boolean }) {
   if (melds.length === 0) {
-    return <div className="meld-row meld-row--empty">无副露</div>;
+    return compact ? null : <div className="meld-row meld-row--empty">无副露</div>;
   }
 
   return (
@@ -741,7 +778,6 @@ function ResultOverlay({
   const winner = state.players[result.winner];
   const from = state.players[result.from];
   const winningTiles = result.kind === "discard" ? [...winner.hand, result.tile] : winner.hand;
-  const canStillReadPattern = checkStandardWin(winningTiles);
 
   return (
     <div className="result-backdrop" role="dialog" aria-modal="true" aria-label="本局结算">
@@ -753,7 +789,7 @@ function ResultOverlay({
         <div className="result-details">
           {result.details.map((detail, index) => (
             <span key={`${detail.name}-${index}`}>
-              {detail.name} +{detail.multiplier}
+              {formatScoreDetail(detail)}
             </span>
           ))}
         </div>
@@ -762,9 +798,9 @@ function ResultOverlay({
             <TileFace key={tile.id} tile={tile} compact />
           ))}
         </div>
-        {canStillReadPattern.pattern ? (
-          <p className="pattern-note">将牌：{canStillReadPattern.pattern.pair}，标准 4 面子 1 将。</p>
-        ) : null}
+        <FlowerRow flowers={winner.flowers} compact />
+        {winner.melds.length > 0 ? <MeldRow melds={winner.melds} compact /> : null}
+        <p className="pattern-note">{describeWinPattern(result.pattern)}</p>
         {state.gameOverReason ? <p className="pattern-note">有人点数归零，本场结束。</p> : null}
         <div className="result-actions">
           {!state.gameOverReason ? (
@@ -788,6 +824,18 @@ function ResultOverlay({
       </section>
     </div>
   );
+}
+
+function describeWinPattern(pattern: WinPattern): string {
+  if (pattern.kind === "seven-pairs") {
+    return `七对子，将牌：${pattern.pair}`;
+  }
+
+  if (pattern.kind === "thirteen-orphans") {
+    return `国士无双，将牌：${pattern.pair}`;
+  }
+
+  return `将牌：${pattern.pair}，标准 4 面子 1 将。`;
 }
 
 function SettingsOverlay({

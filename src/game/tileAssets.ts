@@ -34,6 +34,14 @@ export const TILE_ASSET_CODES = [
   "red",
   "green",
   "white",
+  "spring",
+  "summer",
+  "autumn",
+  "winter",
+  "plum",
+  "orchid",
+  "bamboo",
+  "chrysanthemum",
 ] as const;
 
 export type TileAssetCode = (typeof TILE_ASSET_CODES)[number];

@@ -37,6 +37,19 @@ export function getAudioEvents(previous: GameState | undefined, current: GameSta
     if (meld) {
       events.push({ kind: "meld", action: meld.kind });
     }
+  } else {
+    const upgradedMeld = current.players
+      .flatMap((player, playerIndex) =>
+        player.melds.map((meld, meldIndex) => ({
+          meld,
+          previousMeld: previous.players[playerIndex]?.melds[meldIndex],
+        })),
+      )
+      .find(({ meld, previousMeld }) => previousMeld && previousMeld.kind !== meld.kind);
+
+    if (upgradedMeld) {
+      events.push({ kind: "meld", action: upgradedMeld.meld.kind });
+    }
   }
 
   return events;
@@ -45,9 +58,9 @@ export function getAudioEvents(previous: GameState | undefined, current: GameSta
 export function tileVoiceText(tile: Tile): string {
   if (typeof tile.rank === "number") {
     const number = NUMBER_WORDS[tile.rank] ?? String(tile.rank);
-    if (tile.code.startsWith("m")) return `${number}万`;
-    if (tile.code.startsWith("p")) return `${number}筒`;
-    if (tile.code.startsWith("s")) return `${number}条`;
+    if (/^m[1-9]$/.test(tile.code)) return `${number}万`;
+    if (/^p[1-9]$/.test(tile.code)) return `${number}筒`;
+    if (/^s[1-9]$/.test(tile.code)) return `${number}条`;
   }
 
   return tile.label;
