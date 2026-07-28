@@ -590,16 +590,6 @@ button:disabled {
     opacity 160ms ease;
 }
 
-.tile-face::before {
-  position: absolute;
-  inset: 5% 4% 4% 3%;
-  z-index: -1;
-  border-radius: 8px;
-  background:
-    linear-gradient(180deg, #fffef6 0%, #fbf4e2 100%);
-  content: "";
-}
-
 .tile-face--compact {
   width: 30px;
   height: 42px;
