@@ -4,6 +4,7 @@ import Home, { SichuanModeSelect, XiangkouModeSelect, type GameMode } from "./Ho
 import LinkMatchApp from "./link-match/LinkMatchApp";
 import { SichuanCreateRoom, SichuanJoinRoom } from "./online/SichuanRoom";
 import { XiangkouCreateRoom, XiangkouJoinRoom } from "./online/XiangkouRoom";
+import ParkingApp from "./parking/ParkingApp";
 import SichuanApp from "./sichuan/SichuanApp";
 import YangYangApp from "./yangyang/YangYangApp";
 import "./sichuan/sichuan.css";
@@ -20,6 +21,7 @@ type View =
   | "classic"
   | "sichuan"
   | "link-match"
+  | "parking"
   | "yangyang";
 
 const BASE_PATH = new URL(import.meta.env.BASE_URL, window.location.origin).pathname.replace(/\/+$/, "");
@@ -89,6 +91,9 @@ function resolveView(): View {
   if (path === "/play/link-match") {
     return "link-match";
   }
+  if (path === "/play/parking") {
+    return "parking";
+  }
   if (path === "/play/yangyang") {
     return "yangyang";
   }
@@ -123,6 +128,10 @@ export default function Root() {
     }
     if (mode === "link-match") {
       navigate("/play/link-match", "link-match");
+      return;
+    }
+    if (mode === "parking") {
+      navigate("/play/parking", "parking");
       return;
     }
     navigate("/play/yangyang", "yangyang");
@@ -220,6 +229,10 @@ export default function Root() {
 
   if (view === "link-match") {
     return <LinkMatchApp onBackHome={backHome} />;
+  }
+
+  if (view === "parking") {
+    return <ParkingApp onBackHome={backHome} />;
   }
 
   if (view === "yangyang") {

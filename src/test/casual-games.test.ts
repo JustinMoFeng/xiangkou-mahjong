@@ -22,6 +22,15 @@ import {
   type YangTile,
 } from "../yangyang/engine";
 import { getYangLevelPreset, YANG_LEVEL_PRESETS } from "../yangyang/levels";
+import {
+  canLineExit,
+  clearLine,
+  createParkingGame,
+  getExitReadyLineIds,
+  lineCells,
+  revealParkingHint,
+} from "../parking/engine";
+import { createLineLevel, LINE_LEVEL_PRESETS, LINE_LEVELS } from "../parking/levels";
 
 function linkTile(id: string, code: CasualTileCode, row: number, col: number, removed = false): LinkTile {
   return { id, code, row, col, removed };
@@ -383,5 +392,248 @@ describe("mahjong yangyang rules", () => {
     );
 
     expect(layouts.size).toBeGreaterThan(1);
+  });
+});
+
+describe("line clearing puzzle engine", () => {
+  function levelSignature(level: (typeof LINE_LEVELS)[number]): string {
+    return level.lines
+      .map((line) => `${line.direction}:${line.points.map((point) => `${point.row},${point.col}`).join("|")}`)
+      .join(";");
+  }
+
+  function expectValidLineLevel(level: (typeof LINE_LEVELS)[number]) {
+    const occupied = new Map<string, string>();
+    const playable = new Set((level.cells ?? []).map((point) => `${point.row}:${point.col}`));
+    const expectedCells = level.cells?.length ?? level.rows * level.columns;
+
+    for (const line of level.lines) {
+      for (let index = 1; index < line.points.length; index += 1) {
+        const previous = line.points[index - 1];
+        const current = line.points[index];
+        const distance = Math.abs(previous.row - current.row) + Math.abs(previous.col - current.col);
+
+        expect(distance, `${level.id}/${line.id} gap between ${index - 1} and ${index}`).toBe(1);
+      }
+
+      for (const point of line.points) {
+        const key = `${point.row}:${point.col}`;
+        if (level.cells) {
+          expect(playable.has(key), `${level.id} ${line.id} uses non-playable cell ${key}`).toBe(true);
+        }
+        expect(occupied.has(key), `${level.id} ${line.id} overlaps ${occupied.get(key)} at ${key}`).toBe(false);
+        occupied.set(key, line.id);
+      }
+    }
+
+    expect(occupied.size, level.id).toBe(expectedCells);
+  }
+
+  function expectSolvableLineLevel(level: (typeof LINE_LEVELS)[number]) {
+    let state = createParkingGame(level, 1);
+
+    for (let step = 0; step < level.lines.length && state.status !== "won"; step += 1) {
+      const ready = getExitReadyLineIds(state);
+      expect(ready.length, `${level.id} seed ${level.seed} has no available line at step ${step}`).toBeGreaterThan(0);
+      state = clearLine(state, ready[0], step + 2);
+    }
+
+    expect(state.status, `${level.id} seed ${level.seed}`).toBe("won");
+  }
+
+  it("does not overlap line nodes within a level", () => {
+    for (const level of LINE_LEVELS) {
+      expectValidLineLevel(level);
+    }
+  });
+
+  it("covers every authored board point with exactly one line", () => {
+    for (const level of LINE_LEVELS) {
+      const occupied = new Set<string>();
+      for (const line of level.lines) {
+        const state = createParkingGame(level, 1);
+        const activeLine = state.lines.find((item) => item.id === line.id)!;
+        expect(lineCells(activeLine)).toEqual(line.points);
+
+        for (const point of line.points) {
+          occupied.add(`${point.row}:${point.col}`);
+        }
+      }
+
+      expect(occupied.size, level.id).toBe(level.cells?.length ?? level.rows * level.columns);
+    }
+  });
+
+  it("keeps every authored line point connected to the next point", () => {
+    for (const level of LINE_LEVELS) {
+      for (const line of level.lines) {
+        for (let index = 1; index < line.points.length; index += 1) {
+          const previous = line.points[index - 1];
+          const current = line.points[index];
+          const distance = Math.abs(previous.row - current.row) + Math.abs(previous.col - current.col);
+
+          expect(distance, `${level.id}/${line.id} gap between ${index - 1} and ${index}`).toBe(1);
+        }
+      }
+    }
+  });
+
+  it("allows only lines with a clear head path to exit", () => {
+    const state = createParkingGame(LINE_LEVELS[0], 1);
+    const ready = getExitReadyLineIds(state);
+
+    expect(ready.length).toBeGreaterThan(0);
+    expect(ready.every((id) => canLineExit(state, id))).toBe(true);
+  });
+
+  it("marks a blocked line without increasing moves", () => {
+    const state = createParkingGame(
+      {
+        id: "blocked-test",
+        name: "阻挡测试",
+        rows: 5,
+        columns: 5,
+        lines: [
+          {
+            id: "a",
+            label: "A",
+            points: [
+              { row: 2, col: 2 },
+              { row: 2, col: 1 },
+            ],
+            direction: "right",
+            color: "jade",
+          },
+          {
+            id: "b",
+            label: "B",
+            points: [{ row: 2, col: 3 }],
+            direction: "up",
+            color: "gold",
+          },
+        ],
+      },
+      1,
+    );
+    const next = clearLine(state, "a", 2);
+
+    expect(next.moves).toBe(0);
+    expect(next.blockedId).toBe("a");
+    expect(next.lines.find((line) => line.id === "a")?.exited).toBe(false);
+  });
+
+  it("clears a ready line and increments progress", () => {
+    const state = createParkingGame(LINE_LEVELS[0], 1);
+    const readyId = getExitReadyLineIds(state)[0];
+    const next = clearLine(state, readyId, 2);
+
+    expect(next.moves).toBe(1);
+    expect(next.exitedCount).toBe(1);
+    expect(next.lines.find((line) => line.id === readyId)?.exited).toBe(true);
+  });
+
+  it("reveals a ready hint and consumes limited hint counts", () => {
+    const state = createParkingGame(LINE_LEVELS[0], 1);
+    const ready = getExitReadyLineIds(state);
+    const hinted = revealParkingHint(state);
+
+    expect(state.hintsRemaining).toBe(3);
+    expect(hinted.hintsRemaining).toBe(2);
+    expect(hinted.hintIds).toHaveLength(1);
+    expect(ready).toContain(hinted.hintIds[0]);
+
+    const cleared = clearLine(hinted, hinted.hintIds[0], 3);
+    expect(cleared.hintIds).toEqual([]);
+
+    const emptyHints = { ...state, hintsRemaining: 0 };
+    expect(revealParkingHint(emptyHints)).toBe(emptyHints);
+  });
+
+  it("uses more varied line lengths and keeps single-cell fragments rare", () => {
+    const sampleSeeds = [11, 1701, 20260728, 4103007, 7309009];
+
+    for (const preset of LINE_LEVEL_PRESETS.filter((level) => !level.endless)) {
+      for (const seed of sampleSeeds) {
+        const level = createLineLevel(preset, seed + preset.baseSeed);
+        const lengths = level.lines.map((line) => line.points.length);
+        const singleCellCount = lengths.filter((length) => length === 1).length;
+        const longCount = lengths.filter((length) => length >= Math.max(5, Math.floor(preset.gridSize / 3))).length;
+
+        expect(singleCellCount / lengths.length, `${preset.id} seed ${seed} has too many 1-cell lines`).toBeLessThanOrEqual(0.25);
+        expect(new Set(lengths).size, `${preset.id} seed ${seed} should contain varied line lengths`).toBeGreaterThanOrEqual(5);
+        expect(longCount, `${preset.id} seed ${seed} should contain longer lines`).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it("reduces initial outward-ready lines on higher difficulties", () => {
+    const sampleSeeds = [11, 1701, 20260728, 4103007, 7309009];
+    const averageReadyRatio = (preset: (typeof LINE_LEVEL_PRESETS)[number]) => {
+      const ratios = sampleSeeds.map((seed) => {
+        const level = createLineLevel(preset, seed + preset.baseSeed);
+        return getExitReadyLineIds(createParkingGame(level, 1)).length / level.lines.length;
+      });
+      return ratios.reduce((total, ratio) => total + ratio, 0) / ratios.length;
+    };
+
+    const easy = averageReadyRatio(LINE_LEVEL_PRESETS[0]);
+    const expert = averageReadyRatio(LINE_LEVEL_PRESETS[3]);
+    const master = averageReadyRatio(LINE_LEVEL_PRESETS[4]);
+
+    expect(easy).toBeLessThan(0.55);
+    expect(expert).toBeLessThan(0.28);
+    expect(master).toBeLessThan(0.26);
+    expect(master).toBeLessThan(easy);
+  });
+
+  it("keeps every authored line level solvable", () => {
+    for (const level of LINE_LEVELS) {
+      expectSolvableLineLevel(level);
+    }
+  });
+
+  it("creates reproducible but varied seeded random line levels", () => {
+    const preset = LINE_LEVEL_PRESETS[0];
+    const first = createLineLevel(preset, 20260728);
+    const replay = createLineLevel(preset, 20260728);
+    const different = createLineLevel(preset, 20260729);
+
+    expect(levelSignature(first)).toBe(levelSignature(replay));
+    expect(levelSignature(first)).not.toBe(levelSignature(different));
+    expect(first.cells?.length).toBe(replay.cells?.length);
+    expect(first.cells?.length).toBeGreaterThan(0);
+  });
+
+  it("offers grid-size based difficulties, random board shapes, and endless mode", () => {
+    expect(LINE_LEVEL_PRESETS.map((preset) => preset.difficulty)).toEqual(["简单", "进阶", "困难", "专家", "大师", "无尽"]);
+    expect(LINE_LEVEL_PRESETS.map((preset) => preset.gridSize)).toEqual([10, 14, 18, 22, 30, 10]);
+
+    const standardLevels = LINE_LEVEL_PRESETS.filter((preset) => !preset.endless);
+    expect(standardLevels.every((preset) => preset.gridSize === createLineLevel(preset, preset.baseSeed).rows)).toBe(true);
+    expect(standardLevels.every((preset) => preset.gridSize === createLineLevel(preset, preset.baseSeed).columns)).toBe(true);
+
+    const shapeNames = new Set(Array.from({ length: 36 }, (_, index) => createLineLevel(LINE_LEVEL_PRESETS[4], 9000 + index).shapeName));
+    expect(shapeNames.has("回字形")).toBe(true);
+    expect(shapeNames.has("自由形")).toBe(false);
+    expect(shapeNames.size).toBeGreaterThan(3);
+
+    const endless = LINE_LEVEL_PRESETS.find((preset) => preset.endless)!;
+    expect(createLineLevel(endless, 11, 1).rows).toBe(10);
+    expect(createLineLevel(endless, 11, 3).rows).toBe(14);
+    expect(createLineLevel(endless, 11, 5).rows).toBe(18);
+    expect(createLineLevel(endless, 11, 7).rows).toBe(22);
+    expect(createLineLevel(endless, 11, 9).rows).toBe(30);
+  });
+
+  it("keeps random seeded samples valid and solvable", () => {
+    const sampleSeeds = [11, 1701, 20260728, 4103007, 7309009];
+
+    for (const preset of LINE_LEVEL_PRESETS) {
+      for (const seed of sampleSeeds) {
+        const level = createLineLevel(preset, seed + preset.baseSeed);
+        expectValidLineLevel(level);
+        expectSolvableLineLevel(level);
+      }
+    }
   });
 });
