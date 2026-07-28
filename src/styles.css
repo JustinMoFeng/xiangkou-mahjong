@@ -472,6 +472,36 @@ button:disabled {
   min-height: 28px;
 }
 
+.human-public-sets,
+.public-sets {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex: 0 0 auto;
+}
+
+.human-public-sets {
+  min-height: var(--hand-tile-height);
+}
+
+.flower-row {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  min-height: 24px;
+  flex-wrap: wrap;
+}
+
+.flower-row--compact {
+  min-height: 28px;
+}
+
+.flower-label {
+  color: #ffd889;
+  font-size: 0.7rem;
+  font-weight: 900;
+}
+
 .meld-set {
   display: inline-flex;
   align-items: center;
@@ -642,6 +672,10 @@ button:disabled {
 
 .tile--honor {
   color: #16120f;
+}
+
+.tile--flower {
+  color: #b73567;
 }
 
 @keyframes tile-land {
@@ -1555,6 +1589,24 @@ body {
   gap: 0;
 }
 
+.table-seat .public-sets {
+  flex-wrap: nowrap;
+}
+
+.table-seat--left .public-sets,
+.table-seat--right .public-sets {
+  flex-direction: column;
+  justify-content: center;
+  gap: 0;
+}
+
+.table-seat--left .flower-row,
+.table-seat--right .flower-row {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  gap: 0;
+}
+
 .concealed-hand {
   display: flex;
   flex-wrap: nowrap;
@@ -1638,6 +1690,12 @@ body {
   transform: rotate(180deg);
 }
 
+.table-seat--top .flower-row .tile-face {
+  width: var(--back-width);
+  height: var(--back-height);
+  transform: rotate(180deg);
+}
+
 .table-seat--left .meld-row .tile-face {
   width: var(--back-width);
   height: var(--back-height);
@@ -1645,7 +1703,21 @@ body {
   transform: rotate(90deg);
 }
 
+.table-seat--left .flower-row .tile-face {
+  width: var(--back-width);
+  height: var(--back-height);
+  margin-block: calc((var(--back-width) - var(--back-height)) / 2);
+  transform: rotate(90deg);
+}
+
 .table-seat--right .meld-row .tile-face {
+  width: var(--back-width);
+  height: var(--back-height);
+  margin-block: calc((var(--back-width) - var(--back-height)) / 2);
+  transform: rotate(-90deg);
+}
+
+.table-seat--right .flower-row .tile-face {
   width: var(--back-width);
   height: var(--back-height);
   margin-block: calc((var(--back-width) - var(--back-height)) / 2);

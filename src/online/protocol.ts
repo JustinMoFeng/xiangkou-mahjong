@@ -32,6 +32,7 @@ export type PlayerAction =
       type: "kong";
       seat: Seat;
       code: TileCode;
+      kind?: "added" | "concealed";
     }
   | {
       type: "arrangeHand";

@@ -1,10 +1,12 @@
 import {
   arrangeHand,
   canSeatAddedKong,
+  canSeatConcealedKong,
   canSeatSelfWin,
   claimMeld,
   claimSelfDraw,
   claimWin,
+  declareConcealedKong,
   declareAddedKong,
   discardTile,
   passClaim,
@@ -77,9 +79,9 @@ function validateActionAccess(state: GameState, action: PlayerAction): { ok: tru
   }
 
   if (action.type === "kong") {
-    return canSeatAddedKong(state, action.seat).includes(action.code)
-      ? { ok: true }
-      : { ok: false, reason: "当前不能补杠这张牌" };
+    const available =
+      action.kind === "concealed" ? canSeatConcealedKong(state, action.seat) : canSeatAddedKong(state, action.seat);
+    return available.includes(action.code) ? { ok: true } : { ok: false, reason: "当前不能杠这张牌" };
   }
 
   if (!state.pendingClaim || state.pendingClaim.seat !== action.seat) {
@@ -117,7 +119,9 @@ function reducePlayerAction(state: GameState, action: PlayerAction): GameState {
     case "selfDraw":
       return claimSelfDraw(state, action.seat);
     case "kong":
-      return declareAddedKong(state, action.seat, action.code);
+      return action.kind === "concealed"
+        ? declareConcealedKong(state, action.seat, action.code)
+        : declareAddedKong(state, action.seat, action.code);
     case "arrangeHand":
       return arrangeHand(state, action.seat);
   }
@@ -131,6 +135,7 @@ export function maskStateForSeat(state: GameState, seat: Seat): GameState {
       hand: player.seat === seat ? [...player.hand] : player.hand.map((_, index) => hiddenTile(`seat-${player.seat}-${index}`)),
       drawnTileId: player.seat === seat ? player.drawnTileId : undefined,
       melds: player.melds.map((meld) => ({ ...meld, tiles: [...meld.tiles] })),
+      flowers: [...(player.flowers ?? [])],
       discards: [...player.discards],
     })),
     wall: state.wall.map((_, index) => hiddenTile(`wall-${index}`)),

@@ -113,10 +113,13 @@ describe("online snapshot rules", () => {
 
   it("masks other players concealed hands and keeps the guest hand visible", () => {
     const state = onlineState();
+    const [spring] = tiles(["spring"]);
+    state.players[0].flowers = [spring];
     const masked = maskStateForSeat(state, 1);
 
     expect(masked.players[1].hand.map((tile) => tile.id)).toEqual(state.players[1].hand.map((tile) => tile.id));
     expect(masked.players[0].hand.every((tile) => tile.id.startsWith("hidden-"))).toBe(true);
+    expect(masked.players[0].flowers.map((tile) => tile.code)).toEqual(["spring"]);
     expect(masked.players[2].hand.every((tile) => tile.id.startsWith("hidden-"))).toBe(true);
     expect(masked.wall).toHaveLength(state.wall.length);
     expect(masked.wall.every((tile) => tile.id.startsWith("hidden-"))).toBe(true);

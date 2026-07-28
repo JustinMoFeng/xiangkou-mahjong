@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 102 134" role="img" aria-label="兰 flower tile">
+  <defs>
+    <linearGradient id="flower-face" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fffef6"/>
+      <stop offset="1" stop-color="#fbf4e2"/>
+    </linearGradient>
+  </defs>
+  <rect x="3" y="4.2" width="96" height="128" rx="10" fill="#1c5c45"/>
+  <rect x="0" y="0" width="96" height="128" rx="10" fill="url(#flower-face)" stroke="#d4c19b" stroke-width="1"/>
+  <path d="M20 26 C28 14 42 16 48 29 C56 16 72 17 80 29 C70 31 63 37 58 48 C51 40 42 39 34 48 C31 38 26 31 20 26Z" fill="#6653b8" opacity="0.18"/>
+  <text x="48" y="80" text-anchor="middle" font-size="54" font-family="KaiTi, STKaiti, serif" font-weight="700" fill="#6653b8">兰</text>
+  <circle cx="28" cy="101" r="3.5" fill="#6653b8" opacity="0.55"/>
+  <circle cx="48" cy="106" r="3.5" fill="#6653b8" opacity="0.55"/>
+  <circle cx="68" cy="101" r="3.5" fill="#6653b8" opacity="0.55"/>
+</svg>

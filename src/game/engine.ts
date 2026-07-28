@@ -1,7 +1,7 @@
 import { chooseBotDiscard } from "./bot";
 import { createId } from "./id";
-import { checkStandardWin, scoreWinningHand } from "./rules";
-import { createWall, isNumberTile, shuffleTiles, sortTiles, tileRankNumber, tileSuitPrefix } from "./tiles";
+import { checkWinningHand, scoreWinningHand } from "./rules";
+import { createWall, isFlowerTile, isNumberTile, shuffleTiles, sortTiles, tileRankNumber, tileSuitPrefix } from "./tiles";
 import type {
   ClaimOption,
   GameState,
@@ -12,6 +12,7 @@ import type {
   SeatType,
   Tile,
   TileCode,
+  WinBonusEvent,
   WinKind,
   WinPattern,
   WinResult,
@@ -21,6 +22,7 @@ export const DEFAULT_PLAYER_NAMES: PlayerNames = ["你", "阿南", "西门杠", 
 const WINDS = ["east", "south", "west", "north"] as const;
 const STARTING_SCORE = 25000;
 const HUMAN_SEAT: Seat = 0;
+const MAX_FLOWER_REPLACEMENTS = 32;
 
 export function normalizePlayerNames(names?: readonly string[]): PlayerNames {
   return DEFAULT_PLAYER_NAMES.map((fallback, index) => {
@@ -56,6 +58,7 @@ export function createNewGame(
   players[0].drawnTileId = dealerDraw.id;
 
   for (const player of players) {
+    replaceFlowers(wall, player);
     player.hand = sortHandWithDrawnTile(player.hand, player.drawnTileId);
   }
 
@@ -180,6 +183,7 @@ export function createBotPongScenario(): GameState {
   state.players.forEach((player) => {
     player.drawnTileId = undefined;
     player.melds = [];
+    player.flowers = [];
     player.discards = [];
   });
   state.pendingClaim = undefined;
@@ -241,6 +245,7 @@ export function createMeldLayoutScenario(): GameState {
         calledTile: tiles[0],
       },
     ];
+    player.flowers = [];
     player.hand = player.hand.slice(0, 10);
     player.drawnTileId = undefined;
   });
@@ -295,7 +300,7 @@ export function claimWin(state: GameState, seat: Seat): GameState {
 
   const { tile, from } = state.pendingClaim;
   const winner = state.players[seat];
-  const check = checkStandardWin([...winner.hand, tile]);
+  const check = checkWinningHand([...winner.hand, tile]);
 
   if (!check.canWin || !check.pattern) {
     return state;
@@ -307,6 +312,7 @@ export function claimWin(state: GameState, seat: Seat): GameState {
     tile,
     kind: "discard",
     pattern: check.pattern,
+    bonusEvent: state.pendingClaim.robKong ? "rob-kong" : undefined,
   });
 }
 
@@ -343,6 +349,7 @@ function applyMeldOption(state: GameState, seat: Seat, from: Seat, tile: Tile, o
   player.hand = player.hand.filter((item) => !matching.some((match) => match.id === item.id));
   player.melds.push({
     kind: option.action,
+    kongKind: option.action === "kong" ? "exposed" : undefined,
     from,
     calledTile: tile,
     tiles: sortTiles([...matching, tile]),
@@ -354,6 +361,27 @@ function applyMeldOption(state: GameState, seat: Seat, from: Seat, tile: Tile, o
   next.turn += 1;
   next.recentAction = `${player.name}${meldActionLabel(option.action)}了 ${next.players[from].name} 的 ${tile.label}`;
   next.logs = addLog(next.logs, next.recentAction);
+
+  if (option.action === "kong") {
+    const drawResult = drawSupplementTile(next, seat);
+    if (drawResult.drawnTile) {
+      next.recentAction = `${player.name}明杠 ${tile.label}，补摸一张。`;
+      next.logs = addLog(next.logs, next.recentAction);
+
+      const check = checkWinningHand(player.hand);
+      if (check.canWin && check.pattern && player.type === "bot") {
+        return finishWin(next, {
+          winner: seat,
+          from: seat,
+          tile: drawResult.drawnTile,
+          kind: "self-draw",
+          pattern: check.pattern,
+          bonusEvent: "kong-draw",
+        });
+      }
+    }
+  }
+
   return next;
 }
 
@@ -365,6 +393,18 @@ export function passClaim(state: GameState, seat: Seat): GameState {
   const pending = state.pendingClaim;
   const next = cloneGameState(state);
   next.pendingClaim = undefined;
+
+  if (pending.robKong) {
+    const drawResult = drawSupplementTile(next, pending.from);
+    if (drawResult.drawnTile) {
+      next.currentSeat = pending.from;
+      next.turn += 1;
+      next.recentAction = `${next.players[seat].name}选择跳过抢杠，${next.players[pending.from].name}补摸一张。`;
+      next.logs = addLog(next.logs, next.recentAction);
+    }
+    return next;
+  }
+
   next.currentSeat = nextSeat(pending.from);
   next.turn += 1;
   next.recentAction = `${next.players[seat].name}选择跳过，轮到${next.players[next.currentSeat].name}`;
@@ -379,25 +419,27 @@ export function drawForCurrentSeat(state: GameState): GameState {
 
   const next = cloneGameState(state);
   const player = next.players[next.currentSeat];
+  next.lastSupplementDraw = undefined;
 
-  if (next.wall.length === 0) {
-    next.phase = "finished";
-    next.recentAction = "牌山摸完，本局流局。";
+  const drawResult = drawTileForPlayer(next, player.seat);
+
+  if (drawResult.flowers.length > 0) {
+    const flowerLabels = drawResult.flowers.map((tile) => tile.label).join("、");
+    next.recentAction = `${player.name}补花 ${flowerLabels}。`;
     next.logs = addLog(next.logs, next.recentAction);
+  }
+
+  if (!drawResult.drawnTile) {
     return next;
   }
 
-  const tile = drawTile(next.wall);
-  player.drawnTileId = tile.id;
-  player.hand = sortHandWithDrawnTile([...player.hand, tile], player.drawnTileId);
-
-  const check = checkStandardWin(player.hand);
+  const check = checkWinningHand(player.hand);
   if (check.canWin && check.pattern) {
     if (player.type === "bot") {
       return finishWin(next, {
         winner: player.seat,
         from: player.seat,
-        tile,
+        tile: drawResult.drawnTile,
         kind: "self-draw",
         pattern: check.pattern,
       });
@@ -423,6 +465,16 @@ export function playBotTurnStep(state: GameState): GameState {
     return drawForCurrentSeat(state);
   }
 
+  const addedKong = addedKongCodes(player)[0];
+  if (addedKong) {
+    return declareAddedKong(state, player.seat, addedKong);
+  }
+
+  const concealedKong = concealedKongCodes(player)[0];
+  if (concealedKong) {
+    return declareConcealedKong(state, player.seat, concealedKong);
+  }
+
   return discardTile(state, player.seat, chooseBotDiscard(player.hand).id);
 }
 
@@ -436,7 +488,7 @@ export function canSeatSelfWin(state: GameState, seat: Seat): boolean {
   }
 
   const player = state.players[seat];
-  return player.hand.length % 3 === 2 && checkStandardWin(player.hand).canWin;
+  return player.hand.length % 3 === 2 && checkWinningHand(player.hand).canWin;
 }
 
 export function canSeatAddedKong(state: GameState, seat: Seat): TileCode[] {
@@ -447,13 +499,21 @@ export function canSeatAddedKong(state: GameState, seat: Seat): TileCode[] {
   return addedKongCodes(state.players[seat]);
 }
 
+export function canSeatConcealedKong(state: GameState, seat: Seat): TileCode[] {
+  if (state.phase !== "playing" || state.pendingClaim || state.currentSeat !== seat) {
+    return [];
+  }
+
+  return concealedKongCodes(state.players[seat]);
+}
+
 export function claimSelfDraw(state: GameState, seat: Seat = HUMAN_SEAT): GameState {
   if (!canSeatSelfWin(state, seat)) {
     return state;
   }
 
   const player = state.players[seat];
-  const check = checkStandardWin(player.hand);
+  const check = checkWinningHand(player.hand);
 
   if (!check.canWin || !check.pattern) {
     return state;
@@ -465,6 +525,7 @@ export function claimSelfDraw(state: GameState, seat: Seat = HUMAN_SEAT): GameSt
     tile: player.hand[player.hand.length - 1],
     kind: "self-draw",
     pattern: check.pattern,
+    bonusEvent: state.lastSupplementDraw?.seat === seat ? "kong-draw" : undefined,
   });
 }
 
@@ -492,29 +553,134 @@ export function declareAddedKong(state: GameState, seat: Seat, code: TileCode): 
 
   const [moved] = nextPlayer.hand.splice(tileIndex, 1);
   nextMeld.kind = "kong";
+  nextMeld.kongKind = "added";
   nextMeld.tiles = sortTiles([...nextMeld.tiles, moved]);
   nextPlayer.drawnTileId = undefined;
   nextPlayer.hand = sortTiles(nextPlayer.hand);
-  next.recentAction = `${nextPlayer.name}补杠 ${moved.label}`;
-  next.logs = addLog(next.logs, next.recentAction);
 
-  if (next.wall.length === 0) {
-    next.phase = "finished";
-    next.recentAction = "牌山摸完，本局流局。";
+  const interactiveRobber = orderedSeatsAfter(seat).find(
+    (otherSeat) => next.players[otherSeat].type !== "bot" && checkWinningHand([...next.players[otherSeat].hand, moved]).canWin,
+  );
+  if (interactiveRobber !== undefined) {
+    next.pendingClaim = {
+      id: createId("claim"),
+      from: seat,
+      tile: moved,
+      seat: interactiveRobber,
+      robKong: true,
+      options: [
+        {
+          id: `rob-kong-win-${moved.id}`,
+          action: "win",
+          label: "抢杠胡",
+          handTileIds: [],
+          previewTileCodes: [moved.code],
+        },
+      ],
+    };
+    next.recentAction =
+      interactiveRobber === HUMAN_SEAT
+        ? `你可以抢 ${nextPlayer.name} 的 ${moved.label} 补杠`
+        : `${next.players[interactiveRobber].name}可以抢 ${nextPlayer.name} 的 ${moved.label} 补杠`;
     next.logs = addLog(next.logs, next.recentAction);
     return next;
   }
 
-  const replacement = drawTile(next.wall);
-  nextPlayer.drawnTileId = replacement.id;
-  nextPlayer.hand = sortHandWithDrawnTile([...nextPlayer.hand, replacement], nextPlayer.drawnTileId);
+  const robKongSeat = findBotRobKongWinner(next, seat, moved);
+  if (robKongSeat !== undefined) {
+    const winner = next.players[robKongSeat];
+    const check = checkWinningHand([...winner.hand, moved]);
+    if (check.canWin && check.pattern) {
+      return finishWin(next, {
+        winner: robKongSeat,
+        from: seat,
+        tile: moved,
+        kind: "discard",
+        pattern: check.pattern,
+        bonusEvent: "rob-kong",
+      });
+    }
+  }
+
+  const drawResult = drawSupplementTile(next, seat);
+  if (!drawResult.drawnTile) {
+    return next;
+  }
+
+  next.recentAction = `${nextPlayer.name}补杠 ${moved.label}，补摸一张。`;
+  next.logs = addLog(next.logs, next.recentAction);
   next.turn += 1;
+
+  const check = checkWinningHand(nextPlayer.hand);
+  if (check.canWin && check.pattern && nextPlayer.type === "bot") {
+    return finishWin(next, {
+      winner: seat,
+      from: seat,
+      tile: drawResult.drawnTile,
+      kind: "self-draw",
+      pattern: check.pattern,
+      bonusEvent: "kong-draw",
+    });
+  }
+
+  return next;
+}
+
+export function declareConcealedKong(state: GameState, seat: Seat, code: TileCode): GameState {
+  if (state.phase !== "playing" || state.pendingClaim || state.currentSeat !== seat) {
+    return state;
+  }
+
+  const player = state.players[seat];
+  const matching = player.hand.filter((tile) => tile.code === code);
+  if (matching.length < 4) {
+    return state;
+  }
+
+  const next = cloneGameState(state);
+  const nextPlayer = next.players[seat];
+  const nextMatching = nextPlayer.hand.filter((tile) => tile.code === code).slice(0, 4);
+  if (nextMatching.length < 4) {
+    return state;
+  }
+
+  nextPlayer.hand = nextPlayer.hand.filter((tile) => !nextMatching.some((match) => match.id === tile.id));
+  nextPlayer.melds.push({
+    kind: "kong",
+    kongKind: "concealed",
+    from: seat,
+    calledTile: nextMatching[0],
+    tiles: sortTiles(nextMatching),
+  });
+  nextPlayer.drawnTileId = undefined;
+
+  const drawResult = drawSupplementTile(next, seat);
+  if (!drawResult.drawnTile) {
+    return next;
+  }
+
+  next.recentAction = `${nextPlayer.name}暗杠 ${nextMatching[0].label}，补摸一张。`;
+  next.logs = addLog(next.logs, next.recentAction);
+  next.turn += 1;
+
+  const check = checkWinningHand(nextPlayer.hand);
+  if (check.canWin && check.pattern && nextPlayer.type === "bot") {
+    return finishWin(next, {
+      winner: seat,
+      from: seat,
+      tile: drawResult.drawnTile,
+      kind: "self-draw",
+      pattern: check.pattern,
+      bonusEvent: "kong-draw",
+    });
+  }
+
   return next;
 }
 
 function resolveDiscard(state: GameState, from: Seat, tile: Tile): GameState {
   const seats = orderedSeatsAfter(from);
-  const winSeats = seats.filter((seat) => checkStandardWin([...state.players[seat].hand, tile]).canWin);
+  const winSeats = seats.filter((seat) => checkWinningHand([...state.players[seat].hand, tile]).canWin);
   const interactiveWinner = winSeats.find((seat) => state.players[seat].type !== "bot");
 
   if (interactiveWinner !== undefined) {
@@ -537,7 +703,7 @@ function resolveDiscard(state: GameState, from: Seat, tile: Tile): GameState {
   const botWinner = winSeats.find((seat) => state.players[seat].type === "bot");
 
   if (botWinner !== undefined) {
-    const check = checkStandardWin([...state.players[botWinner].hand, tile]);
+    const check = checkWinningHand([...state.players[botWinner].hand, tile]);
     if (check.canWin && check.pattern) {
       return finishWin(state, {
         winner: botWinner,
@@ -630,6 +796,7 @@ function finishWin(
     tile: Tile;
     kind: WinKind;
     pattern: WinPattern;
+    bonusEvent?: WinBonusEvent;
   },
 ): GameState {
   const next = cloneGameState(state);
@@ -640,6 +807,9 @@ function finishWin(
     winningTile: input.tile,
     kind: input.kind,
     pattern: input.pattern,
+    melds: winner.melds,
+    flowers: winner.flowers,
+    bonusEvent: input.bonusEvent,
   });
   const basePoints = score.multiplier * 1000;
 
@@ -665,6 +835,7 @@ function finishWin(
     title: score.title,
     details: score.details,
     pattern: input.pattern,
+    bonusEvent: input.bonusEvent,
   };
 
   next.phase = "finished";
@@ -688,6 +859,7 @@ function createPlayers(names: PlayerNames, seatTypes?: Partial<Record<Seat, Seat
     hand: [],
     drawnTileId: undefined,
     melds: [],
+    flowers: [],
     discards: [],
     score: STARTING_SCORE,
     isDealer: index === HUMAN_SEAT,
@@ -704,6 +876,78 @@ function drawTile(wall: Tile[]): Tile {
   return tile;
 }
 
+function drawTileFromEnd(wall: Tile[]): Tile {
+  const tile = wall.pop();
+
+  if (!tile) {
+    throw new Error("Cannot draw from an empty wall.");
+  }
+
+  return tile;
+}
+
+function replaceFlowers(wall: Tile[], player: Player, fromEnd = false): Tile[] {
+  const revealedFlowers: Tile[] = [];
+
+  for (let replacementCount = 0; replacementCount < MAX_FLOWER_REPLACEMENTS; replacementCount += 1) {
+    const flowers = player.hand.filter((tile) => isFlowerTile(tile.code));
+    if (flowers.length === 0) {
+      break;
+    }
+
+    revealedFlowers.push(...flowers);
+    player.flowers.push(...flowers);
+    player.hand = player.hand.filter((tile) => !isFlowerTile(tile.code));
+    if (flowers.some((tile) => tile.id === player.drawnTileId)) {
+      player.drawnTileId = undefined;
+    }
+
+    for (const flower of flowers) {
+      if (wall.length === 0) {
+        continue;
+      }
+
+      const replacement = fromEnd ? drawTileFromEnd(wall) : drawTile(wall);
+      player.hand.push(replacement);
+      player.drawnTileId = replacement.id;
+    }
+  }
+
+  return revealedFlowers;
+}
+
+function drawTileForPlayer(state: GameState, seat: Seat, fromEnd = false): { drawnTile?: Tile; flowers: Tile[] } {
+  const player = state.players[seat];
+
+  if (state.wall.length === 0) {
+    state.phase = "finished";
+    state.recentAction = "牌山摸完，本局流局。";
+    state.logs = addLog(state.logs, state.recentAction);
+    return { flowers: [] };
+  }
+
+  const tile = fromEnd ? drawTileFromEnd(state.wall) : drawTile(state.wall);
+  player.drawnTileId = tile.id;
+  player.hand.push(tile);
+  const flowers = replaceFlowers(state.wall, player, fromEnd);
+  player.hand = sortHandWithDrawnTile(player.hand, player.drawnTileId);
+  const drawnTile = player.drawnTileId ? player.hand.find((item) => item.id === player.drawnTileId) : undefined;
+
+  return { drawnTile, flowers };
+}
+
+function drawSupplementTile(state: GameState, seat: Seat): { drawnTile?: Tile; flowers: Tile[] } {
+  const result = drawTileForPlayer(state, seat, true);
+  if (result.drawnTile) {
+    state.lastSupplementDraw = {
+      seat,
+      tileId: result.drawnTile.id,
+    };
+  }
+
+  return result;
+}
+
 function cloneGameState(state: GameState): GameState {
   return {
     ...state,
@@ -715,6 +959,7 @@ function cloneGameState(state: GameState): GameState {
         ...meld,
         tiles: [...meld.tiles],
       })),
+      flowers: [...(player.flowers ?? [])],
       discards: [...player.discards],
     })),
     wall: [...state.wall],
@@ -752,6 +997,25 @@ function addedKongCodes(player: Player): TileCode[] {
     .filter((code, index, codes) => codes.indexOf(code) === index && player.hand.some((tile) => tile.code === code));
 }
 
+function concealedKongCodes(player: Player): TileCode[] {
+  const counts = new Map<TileCode, number>();
+  for (const tile of player.hand) {
+    counts.set(tile.code, (counts.get(tile.code) ?? 0) + 1);
+  }
+
+  return [...counts.entries()].filter(([, count]) => count >= 4).map(([code]) => code);
+}
+
+function findBotRobKongWinner(state: GameState, from: Seat, tile: Tile): Seat | undefined {
+  return orderedSeatsAfter(from).find((seat) => {
+    if (state.players[seat].type !== "bot") {
+      return false;
+    }
+
+    return checkWinningHand([...state.players[seat].hand, tile]).canWin;
+  });
+}
+
 export function getClaimOptionsForSeat(state: GameState, seat: Seat, from: Seat, tile: Tile): ClaimOption[] {
   if (seat === from) {
     return [];
@@ -760,7 +1024,7 @@ export function getClaimOptionsForSeat(state: GameState, seat: Seat, from: Seat,
   const player = state.players[seat];
   const options: ClaimOption[] = [];
 
-  if (checkStandardWin([...player.hand, tile]).canWin) {
+  if (checkWinningHand([...player.hand, tile]).canWin) {
     options.push({
       id: `win-${tile.id}`,
       action: "win",
@@ -861,8 +1125,8 @@ function meldActionLabel(kind: MeldKind): string {
 }
 
 function tileCodeLabel(code: TileCode): string {
-  if (code.startsWith("m")) return `${code.slice(1)}万`;
-  if (code.startsWith("p")) return `${code.slice(1)}筒`;
-  if (code.startsWith("s")) return `${code.slice(1)}条`;
+  if (/^m[1-9]$/.test(code)) return `${code.slice(1)}万`;
+  if (/^p[1-9]$/.test(code)) return `${code.slice(1)}筒`;
+  if (/^s[1-9]$/.test(code)) return `${code.slice(1)}条`;
   return code;
 }

@@ -57,6 +57,12 @@ export function loadSavedGame(): GameState | undefined {
     const profile = loadTableProfile();
     saved.state.players.forEach((player) => {
       player.name = player.name?.trim() || profile.names[player.seat];
+      player.flowers ??= [];
+      player.melds.forEach((meld) => {
+        if (meld.kind === "kong") {
+          meld.kongKind ??= "exposed";
+        }
+      });
     });
     return saved.state;
   } catch {

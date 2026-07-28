@@ -1,10 +1,11 @@
-import type { HonorRank, Suit, Tile, TileCode } from "./types";
+import type { FlowerRank, HonorRank, Suit, Tile, TileCode } from "./types";
 import { tileAssetPath as sharedTileAssetPath } from "./tileAssets";
 
 const NUMBERS = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
 const HONORS = ["east", "south", "west", "north", "red", "green", "white"] as const;
+const FLOWERS = ["spring", "summer", "autumn", "winter", "plum", "orchid", "bamboo", "chrysanthemum"] as const;
 
-const suitMeta: Record<Exclude<Suit, "honors">, { prefix: "m" | "p" | "s"; suffix: string }> = {
+const suitMeta: Record<Exclude<Suit, "honors" | "flowers">, { prefix: "m" | "p" | "s"; suffix: string }> = {
   characters: { prefix: "m", suffix: "万" },
   dots: { prefix: "p", suffix: "筒" },
   bamboos: { prefix: "s", suffix: "条" },
@@ -20,18 +21,30 @@ const honorLabels: Record<HonorRank, { label: string; shortLabel: string }> = {
   white: { label: "白板", shortLabel: "白" },
 };
 
+const flowerLabels: Record<FlowerRank, { label: string; shortLabel: string }> = {
+  spring: { label: "春", shortLabel: "春" },
+  summer: { label: "夏", shortLabel: "夏" },
+  autumn: { label: "秋", shortLabel: "秋" },
+  winter: { label: "冬", shortLabel: "冬" },
+  plum: { label: "梅", shortLabel: "梅" },
+  orchid: { label: "兰", shortLabel: "兰" },
+  bamboo: { label: "竹", shortLabel: "竹" },
+  chrysanthemum: { label: "菊", shortLabel: "菊" },
+};
+
 export const TILE_CODES: TileCode[] = [
   ...NUMBERS.map((rank) => `m${rank}` as TileCode),
   ...NUMBERS.map((rank) => `p${rank}` as TileCode),
   ...NUMBERS.map((rank) => `s${rank}` as TileCode),
   ...HONORS,
+  ...FLOWERS,
 ];
 
 export function createWall(): Tile[] {
   const tiles: Tile[] = [];
 
   for (const [suit, meta] of Object.entries(suitMeta) as Array<
-    [Exclude<Suit, "honors">, (typeof suitMeta)[Exclude<Suit, "honors">]]
+    [Exclude<Suit, "honors" | "flowers">, (typeof suitMeta)[Exclude<Suit, "honors" | "flowers">]]
   >) {
     for (const rank of NUMBERS) {
       const code = `${meta.prefix}${rank}` as TileCode;
@@ -59,6 +72,17 @@ export function createWall(): Tile[] {
         shortLabel: honorLabels[honor].shortLabel,
       });
     }
+  }
+
+  for (const flower of FLOWERS) {
+    tiles.push({
+      id: `${flower}-0`,
+      code: flower,
+      suit: "flowers",
+      rank: flower,
+      label: flowerLabels[flower].label,
+      shortLabel: flowerLabels[flower].shortLabel,
+    });
   }
 
   return tiles;
@@ -89,23 +113,27 @@ export function sortTiles(tiles: Tile[]): Tile[] {
 }
 
 export function tileSortValue(code: TileCode): number {
-  const first = code[0];
-  if (first === "m") return Number(code.slice(1));
-  if (first === "p") return 20 + Number(code.slice(1));
-  if (first === "s") return 40 + Number(code.slice(1));
+  if (/^m[1-9]$/.test(code)) return Number(code.slice(1));
+  if (/^p[1-9]$/.test(code)) return 20 + Number(code.slice(1));
+  if (/^s[1-9]$/.test(code)) return 40 + Number(code.slice(1));
+  if (isFlowerTile(code)) return 80 + FLOWERS.indexOf(code as FlowerRank);
   return 60 + HONORS.indexOf(code as HonorRank);
 }
 
 export function isNumberTile(code: TileCode): boolean {
-  return code.startsWith("m") || code.startsWith("p") || code.startsWith("s");
+  return /^[mps][1-9]$/.test(code);
 }
 
 export function isHonorTile(code: TileCode): boolean {
-  return !isNumberTile(code);
+  return !isNumberTile(code) && !isFlowerTile(code);
+}
+
+export function isFlowerTile(code: TileCode): boolean {
+  return (FLOWERS as readonly string[]).includes(code);
 }
 
 export function tileSuitPrefix(code: TileCode): "m" | "p" | "s" | "z" {
-  if (code.startsWith("m") || code.startsWith("p") || code.startsWith("s")) {
+  if (isNumberTile(code)) {
     return code[0] as "m" | "p" | "s";
   }
 
@@ -121,9 +149,10 @@ export function tileRankNumber(code: TileCode): number {
 }
 
 export function tileColorClass(code: TileCode): string {
-  if (code.startsWith("m")) return "tile--characters";
-  if (code.startsWith("p")) return "tile--dots";
-  if (code.startsWith("s")) return "tile--bamboos";
+  if (/^m[1-9]$/.test(code)) return "tile--characters";
+  if (/^p[1-9]$/.test(code)) return "tile--dots";
+  if (/^s[1-9]$/.test(code)) return "tile--bamboos";
+  if (isFlowerTile(code)) return "tile--flower";
   if (code === "red") return "tile--dragon-red";
   if (code === "green") return "tile--dragon-green";
   return "tile--honor";
