@@ -230,9 +230,15 @@ function getCandidateHeads(rows: number, columns: number, cells: LinePoint[], pl
   for (const point of cells) {
     if (isAssigned(point, assigned)) continue;
 
-    const directions = (Object.keys(DIRECTION_DELTAS) as LineDirection[]).filter((direction) =>
-      hasClearRayToExit(point, direction, rows, columns, playable, assigned),
-    );
+    const directions = (Object.keys(DIRECTION_DELTAS) as LineDirection[]).filter((direction) => {
+      const firstBodyCell = step(point, oppositeDirection(direction));
+      return (
+        hasClearRayToExit(point, direction, rows, columns, playable, assigned) &&
+        inBounds(firstBodyCell, rows, columns) &&
+        isPlayable(firstBodyCell, playable) &&
+        !isAssigned(firstBodyCell, assigned)
+      );
+    });
 
     if (directions.length > 0) {
       candidates.push({ point, directions });
@@ -314,6 +320,10 @@ function movementDirection(from: LinePoint, to: LinePoint): LineDirection | unde
   if (to.row > from.row) return "down";
   if (to.col < from.col) return "left";
   return undefined;
+}
+
+function isAdjacent(first: LinePoint, second: LinePoint): boolean {
+  return Math.abs(first.row - second.row) + Math.abs(first.col - second.col) === 1;
 }
 
 function onwardAvailableCount(
@@ -440,11 +450,11 @@ function remainingFragmentPenaltyAfter({
     }
 
     if (size === 1) {
-      penalty += 18;
+      penalty += 10000;
     } else if (size === 2) {
-      penalty += 5;
+      penalty += 9;
     } else if (size === 3) {
-      penalty += 1.4;
+      penalty += 2.2;
     }
   }
 
@@ -474,7 +484,7 @@ function attemptBuildPath({
   next: () => number;
   turnChance: number;
 }): LineBuildAttempt {
-  const attemptCount = Math.min(72, Math.max(18, candidates.length));
+  const attemptCount = Math.min(32, Math.max(12, Math.ceil(candidates.length / 5)));
   let best: LineBuildAttempt | undefined;
   let bestScore = -Infinity;
 
@@ -514,6 +524,7 @@ function attemptBuildPath({
 function makePeelLevel({
   preset,
   seed,
+  randomSeed = seed,
   targetLineCount,
   turnChance,
   layoutKind,
@@ -521,12 +532,13 @@ function makePeelLevel({
 }: {
   preset: LineLevelPreset;
   seed: number;
+  randomSeed?: number;
   targetLineCount: number;
   turnChance: number;
   layoutKind: LineLayoutKind;
   endlessRound?: number;
 }): LineLevel {
-  const next = createSeededRandom(seed);
+  const next = createSeededRandom(randomSeed);
   const size = preset.gridSize;
   const cells = createShapeCells({ layoutKind, size });
   const playable = new Set(cells.map(pointKey));
@@ -537,10 +549,46 @@ function makePeelLevel({
   let openHeadCount = 0;
   let guard = 0;
 
+  const absorbRemainingSingleton = (): boolean => {
+    const remaining = cells.filter((point) => !assigned.has(pointKey(point)));
+    if (remaining.length !== 1) return false;
+
+    const orphan = remaining[0];
+
+    for (let index = lines.length - 1; index >= 0; index -= 1) {
+      const line = lines[index];
+      const tail = line.points[line.points.length - 1];
+      if (isAdjacent(tail, orphan)) {
+        line.points.push(orphan);
+        assigned.add(pointKey(orphan));
+        return true;
+      }
+    }
+
+    for (let index = lines.length - 1; index >= 0; index -= 1) {
+      const line = lines[index];
+      const head = line.points[0];
+      if (!isAdjacent(head, orphan)) continue;
+
+      const direction = movementDirection(head, orphan);
+      if (!direction) continue;
+
+      line.points.unshift(orphan);
+      line.direction = direction;
+      assigned.add(pointKey(orphan));
+      return true;
+    }
+
+    return false;
+  };
+
   while (assigned.size < totalCells && guard < totalCells * 4) {
     guard += 1;
     const candidates = getCandidateHeads(size, size, cells, playable, assigned);
     if (candidates.length === 0) {
+      if (absorbRemainingSingleton()) {
+        break;
+      }
       throw new Error(`Cannot generate line level ${preset.id}: no peelable head candidates remain.`);
     }
 
@@ -722,15 +770,34 @@ export function createLineLevel(
   const selectedPreset = typeof presetOrId === "string" || presetOrId === undefined ? getParkingLevelPreset(presetOrId) : presetOrId;
   const preset = resolveEndlessPreset(selectedPreset, endlessRound);
   const normalizedSeed = normalizeSeed(seed);
-  const random = createSeededRandom(mixSeed(normalizedSeed + 7919 + endlessRound * 131));
-  const layoutKind = preset.layoutKinds[Math.floor(random() * preset.layoutKinds.length)] ?? "square";
-  const jitterSpan = preset.lineCountJitter * 2 + 1;
-  const lineCountOffset = Math.floor(random() * jitterSpan) - preset.lineCountJitter;
-  const targetLineCount = Math.max(12, preset.targetLineCount + lineCountOffset);
-  const [minTurnChance, maxTurnChance] = preset.turnChance;
-  const turnChance = minTurnChance + random() * (maxTurnChance - minTurnChance);
+  let lastError: unknown;
 
-  return makePeelLevel({ preset, seed: normalizedSeed, targetLineCount, turnChance, layoutKind, endlessRound });
+  for (let attempt = 0; attempt < 80; attempt += 1) {
+    const attemptSeed = mixSeed(normalizedSeed + 7919 + endlessRound * 131 + attempt * 104729);
+    const random = createSeededRandom(attemptSeed);
+    const layoutKind = preset.layoutKinds[Math.floor(random() * preset.layoutKinds.length)] ?? "square";
+    const jitterSpan = preset.lineCountJitter * 2 + 1;
+    const lineCountOffset = Math.floor(random() * jitterSpan) - preset.lineCountJitter;
+    const targetLineCount = Math.max(12, preset.targetLineCount + lineCountOffset);
+    const [minTurnChance, maxTurnChance] = preset.turnChance;
+    const turnChance = minTurnChance + random() * (maxTurnChance - minTurnChance);
+
+    try {
+      return makePeelLevel({
+        preset,
+        seed: normalizedSeed,
+        randomSeed: attemptSeed,
+        targetLineCount,
+        turnChance,
+        layoutKind,
+        endlessRound,
+      });
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error(`Cannot generate line level ${preset.id}.`);
 }
 
 export const LINE_LEVELS: LineLevel[] = LINE_LEVEL_PRESETS.map((preset) => createLineLevel(preset, preset.baseSeed, 1));

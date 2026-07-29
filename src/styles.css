@@ -186,6 +186,78 @@ h1 {
   background: rgba(215, 163, 72, 0.18);
 }
 
+.casual-audio-control {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.casual-audio-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 40;
+  display: grid;
+  gap: 8px;
+  width: min(260px, calc(100vw - 24px));
+  padding: 10px;
+  border: 1px solid rgba(255, 216, 137, 0.38);
+  border-radius: 10px;
+  color: #fff7e3;
+  background: rgba(6, 24, 18, 0.96);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+}
+
+.casual-audio-panel label {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.casual-audio-row {
+  display: grid;
+  gap: 5px;
+}
+
+.casual-audio-slider {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) 28px;
+  gap: 7px;
+  align-items: center;
+}
+
+.casual-audio-panel strong {
+  color: #ffd889;
+}
+
+.casual-audio-panel input[type="range"] {
+  width: 100%;
+  accent-color: #d7a348;
+}
+
+.casual-audio-slider button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 26px;
+  border: 1px solid rgba(255, 247, 227, 0.16);
+  border-radius: 7px;
+  color: #ffd889;
+  background: rgba(255, 247, 227, 0.08);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 900;
+}
+
+.casual-audio-slider button:hover {
+  border-color: rgba(255, 216, 137, 0.62);
+  background: rgba(215, 163, 72, 0.16);
+}
+
 .mode-button:hover:not(:disabled),
 .primary-command:hover:not(:disabled),
 .secondary-command:hover:not(:disabled),

@@ -408,6 +408,24 @@ describe("line clearing puzzle engine", () => {
     const expectedCells = level.cells?.length ?? level.rows * level.columns;
 
     for (const line of level.lines) {
+      expect(line.points.length, `${level.id}/${line.id} should not be a 1-cell line`).toBeGreaterThanOrEqual(2);
+      const head = line.points[0];
+      const firstBody = line.points[1];
+      const firstSegment = {
+        row: head.row - firstBody.row,
+        col: head.col - firstBody.col,
+      };
+      const expectedFirstSegment =
+        line.direction === "up"
+          ? { row: -1, col: 0 }
+          : line.direction === "right"
+            ? { row: 0, col: 1 }
+            : line.direction === "down"
+              ? { row: 1, col: 0 }
+              : { row: 0, col: -1 };
+
+      expect(firstSegment, `${level.id}/${line.id} must point straight out from its arrow cell`).toEqual(expectedFirstSegment);
+
       for (let index = 1; index < line.points.length; index += 1) {
         const previous = line.points[index - 1];
         const current = line.points[index];
@@ -549,7 +567,7 @@ describe("line clearing puzzle engine", () => {
     expect(revealParkingHint(emptyHints)).toBe(emptyHints);
   });
 
-  it("uses more varied line lengths and keeps single-cell fragments rare", () => {
+  it("uses varied line lengths without single-cell fragments", () => {
     const sampleSeeds = [11, 1701, 20260728, 4103007, 7309009];
 
     for (const preset of LINE_LEVEL_PRESETS.filter((level) => !level.endless)) {
@@ -559,7 +577,7 @@ describe("line clearing puzzle engine", () => {
         const singleCellCount = lengths.filter((length) => length === 1).length;
         const longCount = lengths.filter((length) => length >= Math.max(5, Math.floor(preset.gridSize / 3))).length;
 
-        expect(singleCellCount / lengths.length, `${preset.id} seed ${seed} has too many 1-cell lines`).toBeLessThanOrEqual(0.25);
+        expect(singleCellCount, `${preset.id} seed ${seed} should not have 1-cell lines`).toBe(0);
         expect(new Set(lengths).size, `${preset.id} seed ${seed} should contain varied line lengths`).toBeGreaterThanOrEqual(5);
         expect(longCount, `${preset.id} seed ${seed} should contain longer lines`).toBeGreaterThan(0);
       }

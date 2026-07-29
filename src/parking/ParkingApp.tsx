@@ -1,5 +1,8 @@
 import { ArrowLeft, ChevronRight, Infinity, Lightbulb, RotateCcw, Route, Trophy } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
+import { AudioControl } from "../casual/AudioControl";
+import type { CasualAudioSettings } from "../casual/audio";
+import { useCasualAudio } from "../casual/useCasualAudio";
 import {
   clearLine,
   createParkingGame,
@@ -20,7 +23,14 @@ import {
   type LineLevelPreset,
   type LinePoint,
 } from "./levels";
-import { clearParkingGame, loadParkingBest, loadParkingGame, saveParkingBest, saveParkingGame, type ParkingBest } from "./storage";
+import {
+  clearParkingGame,
+  loadParkingBestTimes,
+  loadParkingGame,
+  saveParkingBestTime,
+  saveParkingGame,
+  type ParkingBestTimes,
+} from "./storage";
 import "./parking.css";
 
 const LINE_ARROW_PATH =
@@ -58,6 +68,22 @@ function directionLabel(direction: LineDirection): string {
   if (direction === "right") return "右";
   if (direction === "down") return "下";
   return "左";
+}
+
+function formatElapsed(seconds: number): string {
+  const minutes = Math.floor(seconds / 60);
+  const rest = seconds % 60;
+  return `${minutes}:${String(rest).padStart(2, "0")}`;
+}
+
+function useNowTick(active: boolean): number {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    if (!active) return undefined;
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [active]);
+  return now;
 }
 
 function svgPoint(point: LinePoint, rows: number, columns: number): { x: number; y: number } {
@@ -434,7 +460,7 @@ export default function ParkingApp({ onBackHome }: { onBackHome: () => void }) {
   if (!initialDataRef.current) {
     initialDataRef.current = createInitialParkingData();
   }
-  const [best, setBest] = useState<ParkingBest>(() => loadParkingBest());
+  const [bestTimes, setBestTimes] = useState<ParkingBestTimes>(() => loadParkingBestTimes());
   const [state, setState] = useState<ParkingGameState>(() => initialDataRef.current!.state);
   const [selectedLevel, setSelectedLevel] = useState<LineLevelPreset | undefined>(() => initialDataRef.current!.selectedLevel);
   const [exitingLines, setExitingLines] = useState<ExitingLine[]>([]);
@@ -451,6 +477,10 @@ export default function ParkingApp({ onBackHome }: { onBackHome: () => void }) {
   const exitingLinesRef = useRef(exitingLines);
   const levelIndex = LINE_LEVEL_PRESETS.findIndex((level) => level.id === state.levelId);
   const progressPercent = Math.round((state.exitedCount / state.lines.length) * 100);
+  const { audioEnabled, settings, playAudio, toggleAudio, updateAudioSettings } = useCasualAudio("parking");
+  const now = useNowTick(state.status === "playing");
+  const elapsedSeconds = Math.max(0, Math.floor(((state.endedAt ?? now) - state.startedAt) / 1000));
+  const bestSeconds = bestTimes[state.levelId];
 
   stateRef.current = state;
   readyIdsRef.current = readyIds;
@@ -473,13 +503,21 @@ export default function ParkingApp({ onBackHome }: { onBackHome: () => void }) {
     saveParkingGame(state);
     if (state.status === "won") {
       clearParkingGame();
-      setBest(saveParkingBest(state.levelId, state.moves));
+      const finalSeconds = Math.max(1, Math.floor(((state.endedAt ?? Date.now()) - state.startedAt) / 1000));
+      setBestTimes(saveParkingBestTime(state.levelId, finalSeconds));
     }
   }, [selectedLevel, state, stateMatchesLevel]);
+
+  useEffect(() => {
+    if (state.status === "won") {
+      playAudio("win");
+    }
+  }, [playAudio, state.status]);
 
   useEffect(() => () => clearExitAnimation(), []);
 
   function restart() {
+    playAudio("restart");
     clearExitAnimation();
     clearParkingGame();
     setExitingLines([]);
@@ -488,6 +526,7 @@ export default function ParkingApp({ onBackHome }: { onBackHome: () => void }) {
   }
 
   function startLevel(level: LineLevelPreset) {
+    playAudio("level-start");
     clearExitAnimation();
     clearParkingGame();
     setExitingLines([]);
@@ -497,6 +536,7 @@ export default function ParkingApp({ onBackHome }: { onBackHome: () => void }) {
   }
 
   function nextLevel() {
+    playAudio("level-start");
     clearExitAnimation();
     clearParkingGame();
     setExitingLines([]);
@@ -520,17 +560,19 @@ export default function ParkingApp({ onBackHome }: { onBackHome: () => void }) {
     if (exitingLinesRef.current.some((item) => item.id === line.id)) return;
     const currentReadyIds = readyIdsRef.current;
     if (!currentReadyIds.has(line.id)) {
-      setState((current) => {
-        if (current.selectedId === line.id && current.blockedId === line.id) {
-          return current;
-        }
+      playAudio("blocked");
+      const currentState = stateRef.current;
+      if (currentState.selectedId === line.id && currentState.blockedId === line.id) {
+        return;
+      }
 
-        return {
-          ...current,
-          selectedId: line.id,
-          blockedId: line.id,
-        };
-      });
+      const nextState = {
+        ...currentState,
+        selectedId: line.id,
+        blockedId: line.id,
+      };
+      stateRef.current = nextState;
+      setState(nextState);
       return;
     }
 
@@ -552,11 +594,12 @@ export default function ParkingApp({ onBackHome }: { onBackHome: () => void }) {
     };
     stateRef.current = nextState;
     readyIdsRef.current = new Set(getExitReadyLineIds(nextState));
+    playAudio("clear");
     setState(nextState);
     const nextExitingLines = [...exitingLinesRef.current, nextExiting];
     exitingLinesRef.current = nextExitingLines;
     setExitingLines(nextExitingLines);
-  }, []);
+  }, [playAudio]);
 
   const onExitAnimationComplete = useCallback((lineId: string) => {
     setExitingLines((current) => {
@@ -573,18 +616,27 @@ export default function ParkingApp({ onBackHome }: { onBackHome: () => void }) {
   }, [onPick]);
 
   function hint() {
-    setState((current) => {
-      const next = revealParkingHint(current);
+    const next = revealParkingHint(stateRef.current);
+    if (next !== stateRef.current) {
+      readyIdsRef.current = new Set(getExitReadyLineIds(next));
       stateRef.current = next;
-      if (next !== current) {
-        readyIdsRef.current = new Set(getExitReadyLineIds(next));
-      }
-      return next;
-    });
+      playAudio("hint");
+    }
+    setState(next);
   }
 
   if (!selectedLevel) {
-    return <ParkingLevelSelect onBackHome={onBackHome} onStartLevel={startLevel} />;
+    return (
+      <ParkingLevelSelect
+        audioEnabled={audioEnabled}
+        bestTimes={bestTimes}
+        settings={settings}
+        onBackHome={onBackHome}
+        onStartLevel={startLevel}
+        onToggleAudio={toggleAudio}
+        onUpdateAudioSettings={updateAudioSettings}
+      />
+    );
   }
 
   return (
@@ -598,13 +650,21 @@ export default function ParkingApp({ onBackHome }: { onBackHome: () => void }) {
             <p>{state.endless ? `无尽第 ${state.endlessRound ?? 1} 盘` : `难度 ${levelIndex + 1}`}</p>
             <h1>线阵清场</h1>
           </div>
+          <AudioControl
+            audioEnabled={audioEnabled}
+            settings={settings}
+            buttonClassName="parking-back parking-audio-button"
+            onToggleAudio={toggleAudio}
+            onUpdateSettings={updateAudioSettings}
+          />
           <div className="parking-stats">
+            <span>用时 {formatElapsed(elapsedSeconds)}</span>
             <span>步数 {state.moves}</span>
             <span>
               清除 {state.exitedCount}/{state.lines.length}
             </span>
             <span>提示 {state.hintsRemaining}</span>
-            {best[state.levelId] ? <span>最佳 {best[state.levelId]}</span> : null}
+            <span>{bestSeconds ? `最快 ${formatElapsed(bestSeconds)}` : "最快 --"}</span>
           </div>
         </header>
 
@@ -704,7 +764,7 @@ export default function ParkingApp({ onBackHome }: { onBackHome: () => void }) {
               <Trophy size={28} />
               <h2>线阵清空</h2>
               <p>
-                {state.endless ? `无尽第 ${state.endlessRound ?? 1} 盘` : state.levelName} · {state.moves} 步
+                {state.endless ? `无尽第 ${state.endlessRound ?? 1} 盘` : state.levelName} · 用时 {formatElapsed(elapsedSeconds)} · {state.moves} 步
               </p>
               <div className="parking-actions">
                 <button className="parking-secondary" type="button" onClick={restart}>
@@ -723,11 +783,21 @@ export default function ParkingApp({ onBackHome }: { onBackHome: () => void }) {
 }
 
 function ParkingLevelSelect({
+  audioEnabled,
+  bestTimes,
+  settings,
   onBackHome,
   onStartLevel,
+  onToggleAudio,
+  onUpdateAudioSettings,
 }: {
+  audioEnabled: boolean;
+  bestTimes: ParkingBestTimes;
+  settings: CasualAudioSettings;
   onBackHome: () => void;
   onStartLevel: (level: LineLevelPreset) => void;
+  onToggleAudio: () => void;
+  onUpdateAudioSettings: (settings: CasualAudioSettings) => void;
 }) {
   const standardLevels = LINE_LEVEL_PRESETS.filter((level) => !level.endless);
   const endlessLevel = LINE_LEVEL_PRESETS.find((level) => level.endless);
@@ -744,13 +814,20 @@ function ParkingLevelSelect({
             <h1>选择难度</h1>
             <span>难度按点阵数量递增；每局形状会在方阵、菱形、回字形、十字、阶梯中随机变化。</span>
           </div>
+          <AudioControl
+            audioEnabled={audioEnabled}
+            settings={settings}
+            buttonClassName="casual-icon-button parking-audio-button"
+            onToggleAudio={onToggleAudio}
+            onUpdateSettings={onUpdateAudioSettings}
+          />
         </header>
 
         <section className="parking-level-grid" aria-label="线阵清场关卡">
           {standardLevels.map((level) => (
-            <ParkingLevelCard key={level.id} level={level} onStart={onStartLevel} />
+            <ParkingLevelCard key={level.id} level={level} bestTime={bestTimes[level.id]} onStart={onStartLevel} />
           ))}
-          {endlessLevel ? <ParkingLevelCard level={endlessLevel} onStart={onStartLevel} /> : null}
+          {endlessLevel ? <ParkingLevelCard level={endlessLevel} bestTime={bestTimes[endlessLevel.id]} onStart={onStartLevel} /> : null}
         </section>
       </section>
     </main>
@@ -759,9 +836,11 @@ function ParkingLevelSelect({
 
 function ParkingLevelCard({
   level,
+  bestTime,
   onStart,
 }: {
   level: LineLevelPreset;
+  bestTime?: number;
   onStart: (level: LineLevelPreset) => void;
 }) {
   const shapes = level.layoutKinds.map((kind) => LAYOUT_LABELS[kind]).join(" / ");
@@ -778,6 +857,7 @@ function ParkingLevelCard({
       <small>{level.endless ? "通关后自动递进" : `约 ${level.targetLineCount} 条线`}</small>
       <p>{level.description}</p>
       <span className="parking-level-card__meta">随机形状：{shapes}</span>
+      <span className="parking-level-card__best">{bestTime ? `最快 ${formatElapsed(bestTime)}` : "未完成"}</span>
       {level.endless ? <Infinity size={18} aria-hidden="true" /> : <Route size={18} aria-hidden="true" />}
       <ChevronRight size={18} aria-hidden="true" />
     </button>

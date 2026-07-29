@@ -1,28 +1,35 @@
 import type { ParkingGameState } from "./engine";
 import { createLineLevel, getParkingLevelPreset } from "./levels";
 
-const BEST_KEY = "line-clear-best-v1";
+const BEST_TIMES_KEY = "line-clear-best-times-v1";
 const SAVE_KEY = "line-clear-save-v4";
 
-export type ParkingBest = Record<string, number>;
+export type ParkingBestTimes = Record<string, number>;
 
-export function loadParkingBest(): ParkingBest {
+export function loadParkingBestTimes(): ParkingBestTimes {
   try {
-    const raw = localStorage.getItem(BEST_KEY);
-    return raw ? (JSON.parse(raw) as ParkingBest) : {};
+    const raw = localStorage.getItem(BEST_TIMES_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object") return {};
+
+    return Object.fromEntries(
+      Object.entries(parsed).filter(([, value]) => typeof value === "number" && Number.isFinite(value) && value > 0),
+    ) as ParkingBestTimes;
   } catch {
     return {};
   }
 }
 
-export function saveParkingBest(levelId: string, moves: number): ParkingBest {
-  const current = loadParkingBest();
+export function saveParkingBestTime(levelId: string, seconds: number): ParkingBestTimes {
+  const current = loadParkingBestTimes();
   const previous = current[levelId];
-  if (previous !== undefined && previous <= moves) {
+  if (previous !== undefined && previous <= seconds) {
     return current;
   }
-  const next = { ...current, [levelId]: moves };
-  localStorage.setItem(BEST_KEY, JSON.stringify(next));
+
+  const next = { ...current, [levelId]: seconds };
+  localStorage.setItem(BEST_TIMES_KEY, JSON.stringify(next));
   return next;
 }
 

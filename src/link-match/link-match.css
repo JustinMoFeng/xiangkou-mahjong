@@ -24,7 +24,7 @@
 
 .link-level-select__top {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 10px;
   align-items: center;
   padding-bottom: 10px;
@@ -216,6 +216,12 @@
 
 .casual-icon-button {
   width: 36px;
+}
+
+.casual-icon-button.is-active {
+  border-color: rgba(255, 216, 137, 0.72);
+  color: #ffd889;
+  background: rgba(215, 163, 72, 0.18);
 }
 
 .casual-actions,
