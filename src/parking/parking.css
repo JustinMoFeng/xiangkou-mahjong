@@ -1,6 +1,12 @@
 .parking-shell {
-  min-height: 100svh;
-  padding: clamp(8px, 1.4vw, 16px);
+  height: 100dvh;
+  min-height: 0;
+  padding:
+    max(clamp(8px, 1.4vw, 16px), env(safe-area-inset-top))
+    max(clamp(8px, 1.4vw, 16px), env(safe-area-inset-right))
+    max(clamp(8px, 1.4vw, 16px), env(safe-area-inset-bottom))
+    max(clamp(8px, 1.4vw, 16px), env(safe-area-inset-left));
+  overflow: hidden;
   color: #f6efe1;
   background:
     radial-gradient(circle at 18% 12%, rgba(215, 163, 72, 0.18), transparent 28%),
@@ -17,8 +23,8 @@
   grid-template-rows: auto minmax(0, 1fr);
   gap: clamp(8px, 1.4vw, 12px);
   width: min(1180px, 100%);
-  height: calc(100svh - clamp(16px, 2.8vw, 32px));
-  min-height: 560px;
+  height: 100%;
+  min-height: 0;
   margin: 0 auto;
   padding: clamp(8px, 1.5vw, 12px);
   border: 1px solid rgba(215, 163, 72, 0.34);
@@ -38,8 +44,8 @@
   grid-template-rows: auto minmax(0, 1fr);
   gap: clamp(8px, 1.2vw, 12px);
   width: min(1120px, 100%);
-  height: calc(100dvh - clamp(12px, 2.4vw, 28px));
-  min-height: 520px;
+  height: 100%;
+  min-height: 0;
   margin: 0 auto;
   padding: clamp(9px, 1.4vw, 16px);
   overflow: hidden;
@@ -55,7 +61,7 @@
 
 .parking-level-select__top {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 10px;
   align-items: center;
   padding-bottom: 8px;
@@ -180,6 +186,19 @@
   line-height: 1.35;
 }
 
+.parking-level-card__best {
+  grid-column: 1 / -1;
+  width: fit-content;
+  padding: 2px 7px;
+  border: 1px solid rgba(255, 247, 227, 0.12);
+  border-radius: 999px;
+  color: rgba(246, 239, 225, 0.74);
+  background: rgba(0, 0, 0, 0.18);
+  font-size: 0.68rem;
+  font-weight: 900;
+  line-height: 1.35;
+}
+
 .parking-level-card svg {
   color: rgba(255, 216, 137, 0.82);
 }
@@ -196,7 +215,7 @@
 
 .parking-topbar {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto minmax(0, auto);
   gap: 10px;
   align-items: center;
   min-width: 0;
@@ -226,6 +245,12 @@
   width: 36px;
   min-height: 34px;
   padding: 0;
+}
+
+.parking-audio-button.is-active {
+  border-color: rgba(255, 216, 137, 0.72);
+  color: #ffd889;
+  background: rgba(215, 163, 72, 0.18);
 }
 
 .parking-back:hover,
@@ -373,9 +398,8 @@
   position: relative;
   align-self: center;
   justify-self: center;
-  aspect-ratio: var(--columns) / var(--rows);
-  width: min(100%, calc((100svh - 260px) * var(--columns) / var(--rows)));
-  max-height: 100%;
+  aspect-ratio: 1;
+  width: min(100%, calc(100dvh - 250px));
   min-width: 0;
   margin: 0 auto;
   padding: var(--board-padding);
@@ -624,9 +648,15 @@
 }
 
 @media (max-width: 700px) {
+  .parking-shell {
+    padding:
+      max(4px, env(safe-area-inset-top))
+      max(4px, env(safe-area-inset-right))
+      max(4px, env(safe-area-inset-bottom))
+      max(4px, env(safe-area-inset-left));
+  }
+
   .parking-level-select {
-    height: calc(100dvh - 12px);
-    min-height: 0;
     padding: 8px;
   }
 
@@ -639,42 +669,105 @@
   }
 
   .parking-frame {
-    height: calc(100svh - 12px);
-    min-height: 0;
-    padding: 8px;
+    gap: 6px;
+    padding: 7px;
   }
 
   .parking-topbar {
-    grid-template-columns: 38px minmax(0, 1fr);
+    grid-template-columns: 38px minmax(0, 1fr) 38px;
+    gap: 6px;
+    padding: 0 2px 5px;
+  }
+
+  .parking-title p {
+    display: none;
+  }
+
+  .parking-title h1 {
+    font-size: 1rem;
   }
 
   .parking-stats {
     grid-column: 1 / -1;
     justify-content: flex-start;
+    gap: 4px;
+  }
+
+  .parking-stats span,
+  .parking-ready-pill {
+    min-height: 22px;
+    padding: 3px 6px;
+    font-size: 0.62rem;
   }
 
   .parking-hud {
-    grid-template-columns: minmax(92px, auto) minmax(0, 1fr);
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 6px;
+  }
+
+  .parking-level-change {
+    min-height: 28px;
+    padding: 0 8px;
+    font-size: 0.68rem;
   }
 
   .parking-ready-pill {
-    grid-column: 1 / -1;
-    justify-self: stretch;
+    grid-column: auto;
+    justify-self: end;
+    max-width: 92px;
+    gap: 4px;
   }
 
   .parking-level-name {
     justify-self: end;
-    font-size: 0.76rem;
+    font-size: 0.68rem;
+  }
+
+  .parking-level-name span,
+  .parking-ready-pill span {
+    font-size: 0.58rem;
+  }
+
+  .parking-ready-pill strong {
+    font-size: 0.68rem;
+  }
+
+  .parking-play {
+    gap: 6px;
   }
 
   .parking-board {
-    width: min(100%, calc((100svh - 260px) * var(--columns) / var(--rows)));
+    --board-padding: 8px;
+    width: min(100%, calc(100dvh - 190px));
+  }
+
+  .parking-toolbar {
+    grid-template-columns: 34px minmax(0, 1fr) 34px;
+    gap: 8px;
+  }
+
+  .parking-round {
+    width: 34px;
+    height: 34px;
+  }
+
+  .parking-round svg {
+    width: 22px;
+    height: 22px;
+  }
+
+  .parking-progress__bar {
+    height: 9px;
   }
 }
 
 @media (orientation: landscape) and (max-height: 560px) {
   .parking-shell {
-    padding: 4px;
+    padding:
+      max(3px, env(safe-area-inset-top))
+      max(4px, env(safe-area-inset-right))
+      max(3px, env(safe-area-inset-bottom))
+      max(4px, env(safe-area-inset-left));
   }
 
   .parking-level-select {
@@ -707,8 +800,6 @@
   }
 
   .parking-frame {
-    height: calc(100svh - 8px);
-    min-height: 0;
     gap: 5px;
     padding: 6px;
   }
@@ -743,6 +834,7 @@
   }
 
   .parking-board {
-    width: min(100%, calc((100svh - 128px) * var(--columns) / var(--rows)));
+    --board-padding: 7px;
+    width: min(100%, calc(100dvh - 150px));
   }
 }

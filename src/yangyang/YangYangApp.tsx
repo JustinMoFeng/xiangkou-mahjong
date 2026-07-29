@@ -1,6 +1,9 @@
 import { ArrowLeft, ChevronRight, Layers3, Lightbulb, RotateCcw, Shuffle, Timer, Undo2 } from "lucide-react";
 import { useEffect, useState, type CSSProperties } from "react";
+import { AudioControl } from "../casual/AudioControl";
+import type { CasualAudioSettings } from "../casual/audio";
 import { tileAssetPath, tileLabel } from "../casual/tiles";
+import { useCasualAudio } from "../casual/useCasualAudio";
 import {
   createYangGame,
   createYangGameForLevel,
@@ -71,6 +74,7 @@ export default function YangYangApp({ onBackHome }: { onBackHome: () => void }) 
   const [selectedLevel, setSelectedLevel] = useState<YangLevelPreset | undefined>(() =>
     hasLevelParam ? initialLevel : undefined,
   );
+  const { audioEnabled, settings, playAudio, toggleAudio, updateAudioSettings } = useCasualAudio("yangyang");
   const now = useNowTick(state.status === "playing");
   const elapsedSeconds = Math.max(0, Math.floor(((state.endedAt ?? now) - state.startedAt) / 1000));
   const clickableIds = new Set(getClickableYangTiles(state.tiles).map((tile) => tile.id));
@@ -106,7 +110,16 @@ export default function YangYangApp({ onBackHome }: { onBackHome: () => void }) 
     setBestTimes(saveYangBestTime(state.levelId, finalSeconds));
   }, [state.endedAt, state.levelId, state.startedAt, state.status]);
 
+  useEffect(() => {
+    if (state.status === "won") {
+      playAudio("win");
+    } else if (state.status === "failed") {
+      playAudio("fail");
+    }
+  }, [playAudio, state.status]);
+
   function restart() {
+    playAudio("restart");
     const level = selectedLevel ?? getYangLevelPreset(state.levelId);
     const next = createYangGameForLevel(Date.now(), Date.now(), level, state.endless ? state.endlessRound : 1);
     clearSavedYangGame();
@@ -114,6 +127,7 @@ export default function YangYangApp({ onBackHome }: { onBackHome: () => void }) 
   }
 
   function startLevel(level: YangLevelPreset) {
+    playAudio("level-start");
     clearSavedYangGame();
     setSelectedLevel(level);
     window.history.replaceState({}, "", `${withBasePath("/play/yangyang")}?level=${level.id}`);
@@ -121,6 +135,7 @@ export default function YangYangApp({ onBackHome }: { onBackHome: () => void }) 
   }
 
   function nextLevel() {
+    playAudio("level-start");
     const nextPreset = state.endless ? getYangLevelPreset("endless") : getNextYangLevelPreset(state.levelId);
     const nextRound = state.endless ? state.endlessRound + 1 : 1;
     clearSavedYangGame();
@@ -136,19 +151,35 @@ export default function YangYangApp({ onBackHome }: { onBackHome: () => void }) 
   }
 
   function pick(tile: YangTile) {
-    setState((current) => selectYangTile(current, tile.id));
+    const next = selectYangTile(state, tile.id);
+    if (next !== state) {
+      playAudio(next.slots.length < state.slots.length ? "match" : "select");
+    }
+    setState(next);
   }
 
   function undo() {
-    setState((current) => undoYangMove(current));
+    const next = undoYangMove(state);
+    if (next !== state) {
+      playAudio("undo");
+    }
+    setState(next);
   }
 
   function hint() {
-    setState((current) => revealYangHint(current));
+    const next = revealYangHint(state);
+    if (next !== state && next.hintIds.length > 0) {
+      playAudio("hint");
+    }
+    setState(next);
   }
 
   function shuffle() {
-    setState((current) => shuffleYangTiles(current));
+    const next = shuffleYangTiles(state);
+    if (next !== state && next.shuffleCount > state.shuffleCount) {
+      playAudio("shuffle");
+    }
+    setState(next);
   }
 
   function renderTile(tile: YangTile) {
@@ -189,7 +220,15 @@ export default function YangYangApp({ onBackHome }: { onBackHome: () => void }) 
       </div>
 
       {!selectedLevel ? (
-        <YangLevelSelect bestTimes={bestTimes} onBackHome={onBackHome} onStartLevel={startLevel} />
+        <YangLevelSelect
+          audioEnabled={audioEnabled}
+          bestTimes={bestTimes}
+          settings={settings}
+          onBackHome={onBackHome}
+          onStartLevel={startLevel}
+          onToggleAudio={toggleAudio}
+          onUpdateAudioSettings={updateAudioSettings}
+        />
       ) : (
       <section className="casual-frame yang-frame" aria-label="麻将羊羊消">
         <header className="casual-topbar">
@@ -212,6 +251,13 @@ export default function YangYangApp({ onBackHome }: { onBackHome: () => void }) 
             <span>{state.maxLayer + 1}层</span>
           </div>
           <div className="casual-actions" aria-label="羊羊消操作">
+            <AudioControl
+              audioEnabled={audioEnabled}
+              settings={settings}
+              buttonClassName="casual-icon-button"
+              onToggleAudio={toggleAudio}
+              onUpdateSettings={updateAudioSettings}
+            />
             <button type="button" onClick={restart}>
               <RotateCcw size={16} />
               重开
@@ -333,13 +379,21 @@ function yangTileStyle(tile: YangTile, bounds: YangMainBounds): CSSProperties {
 }
 
 function YangLevelSelect({
+  audioEnabled,
   bestTimes,
+  settings,
   onBackHome,
   onStartLevel,
+  onToggleAudio,
+  onUpdateAudioSettings,
 }: {
+  audioEnabled: boolean;
   bestTimes: YangBestTimes;
+  settings: CasualAudioSettings;
   onBackHome: () => void;
   onStartLevel: (level: YangLevelPreset) => void;
+  onToggleAudio: () => void;
+  onUpdateAudioSettings: (settings: CasualAudioSettings) => void;
 }) {
   const standardLevels = YANG_LEVEL_PRESETS.filter((level) => !level.endless);
   const endlessLevel = YANG_LEVEL_PRESETS.find((level) => level.endless);
@@ -354,6 +408,13 @@ function YangLevelSelect({
           <p>麻将羊羊消</p>
           <h1>选择难度</h1>
         </div>
+        <AudioControl
+          audioEnabled={audioEnabled}
+          settings={settings}
+          buttonClassName="casual-icon-button"
+          onToggleAudio={onToggleAudio}
+          onUpdateSettings={onUpdateAudioSettings}
+        />
       </header>
 
       <section className="yang-level-grid" aria-label="羊羊消关卡">

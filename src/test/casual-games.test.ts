@@ -31,6 +31,16 @@ import {
   revealParkingHint,
 } from "../parking/engine";
 import { createLineLevel, LINE_LEVEL_PRESETS, LINE_LEVELS } from "../parking/levels";
+import {
+  canTwenty48Move,
+  collapseTwenty48Line,
+  continueTwenty48Game,
+  createTwenty48Game,
+  createTwenty48StateForTest,
+  highestTwenty48Tile,
+  moveTwenty48,
+  undoTwenty48Move,
+} from "../twenty48/engine";
 
 function linkTile(id: string, code: CasualTileCode, row: number, col: number, removed = false): LinkTile {
   return { id, code, row, col, removed };
@@ -408,6 +418,24 @@ describe("line clearing puzzle engine", () => {
     const expectedCells = level.cells?.length ?? level.rows * level.columns;
 
     for (const line of level.lines) {
+      expect(line.points.length, `${level.id}/${line.id} should not be a 1-cell line`).toBeGreaterThanOrEqual(2);
+      const head = line.points[0];
+      const firstBody = line.points[1];
+      const firstSegment = {
+        row: head.row - firstBody.row,
+        col: head.col - firstBody.col,
+      };
+      const expectedFirstSegment =
+        line.direction === "up"
+          ? { row: -1, col: 0 }
+          : line.direction === "right"
+            ? { row: 0, col: 1 }
+            : line.direction === "down"
+              ? { row: 1, col: 0 }
+              : { row: 0, col: -1 };
+
+      expect(firstSegment, `${level.id}/${line.id} must point straight out from its arrow cell`).toEqual(expectedFirstSegment);
+
       for (let index = 1; index < line.points.length; index += 1) {
         const previous = line.points[index - 1];
         const current = line.points[index];
@@ -549,7 +577,7 @@ describe("line clearing puzzle engine", () => {
     expect(revealParkingHint(emptyHints)).toBe(emptyHints);
   });
 
-  it("uses more varied line lengths and keeps single-cell fragments rare", () => {
+  it("uses varied line lengths without single-cell fragments", () => {
     const sampleSeeds = [11, 1701, 20260728, 4103007, 7309009];
 
     for (const preset of LINE_LEVEL_PRESETS.filter((level) => !level.endless)) {
@@ -559,7 +587,7 @@ describe("line clearing puzzle engine", () => {
         const singleCellCount = lengths.filter((length) => length === 1).length;
         const longCount = lengths.filter((length) => length >= Math.max(5, Math.floor(preset.gridSize / 3))).length;
 
-        expect(singleCellCount / lengths.length, `${preset.id} seed ${seed} has too many 1-cell lines`).toBeLessThanOrEqual(0.25);
+        expect(singleCellCount, `${preset.id} seed ${seed} should not have 1-cell lines`).toBe(0);
         expect(new Set(lengths).size, `${preset.id} seed ${seed} should contain varied line lengths`).toBeGreaterThanOrEqual(5);
         expect(longCount, `${preset.id} seed ${seed} should contain longer lines`).toBeGreaterThan(0);
       }
@@ -635,5 +663,97 @@ describe("line clearing puzzle engine", () => {
         expectSolvableLineLevel(level);
       }
     }
+  });
+});
+
+describe("2048 rules", () => {
+  it("collapses one line using standard 2048 merge order", () => {
+    expect(collapseTwenty48Line([2, 2, 2, 0])).toMatchObject({
+      line: [4, 2, 0, 0],
+      scoreGain: 4,
+      moved: true,
+    });
+    expect(collapseTwenty48Line([2, 2, 2, 2])).toMatchObject({
+      line: [4, 4, 0, 0],
+      scoreGain: 8,
+      moved: true,
+    });
+    expect(collapseTwenty48Line([4, 8, 16, 32]).moved).toBe(false);
+  });
+
+  it("creates reproducible opening boards with two tiles", () => {
+    const first = createTwenty48Game(17, 0);
+    const replay = createTwenty48Game(17, 0);
+    const different = createTwenty48Game(18, 0);
+
+    expect(first.board).toEqual(replay.board);
+    expect(first.board.filter((value) => value > 0)).toHaveLength(2);
+    expect(first.board).not.toEqual(different.board);
+  });
+
+  it("moves left, merges score, and spawns one new tile after a valid move", () => {
+    const state = createTwenty48StateForTest(
+      [
+        2, 2, 0, 0,
+        4, 0, 4, 0,
+        0, 0, 0, 0,
+        8, 16, 32, 64,
+      ],
+      { randomState: 7 },
+    );
+    const next = moveTwenty48(state, "left", 10);
+
+    expect(next).not.toBe(state);
+    expect(next.moves).toBe(1);
+    expect(next.score).toBe(12);
+    expect(next.board[0]).toBe(4);
+    expect(next.board[4]).toBe(8);
+    expect(next.board.filter((value) => value > 0)).toHaveLength(7);
+    expect(next.history).toHaveLength(1);
+  });
+
+  it("ignores moves that do not change the board", () => {
+    const state = createTwenty48StateForTest([
+      2, 4, 8, 16,
+      32, 64, 128, 256,
+      512, 1024, 2, 4,
+      8, 16, 32, 64,
+    ], { status: "playing" });
+
+    expect(moveTwenty48(state, "left")).toBe(state);
+    expect(canTwenty48Move(state.board)).toBe(false);
+  });
+
+  it("detects wins, continuation, losses, and undo", () => {
+    const winning = createTwenty48StateForTest(
+      [
+        1024, 1024, 0, 0,
+        4, 8, 16, 32,
+        64, 128, 256, 512,
+        2, 4, 8, 16,
+      ],
+      { randomState: 3 },
+    );
+    const won = moveTwenty48(winning, "left", 100);
+
+    expect(won.status).toBe("won");
+    expect(highestTwenty48Tile(won.board)).toBe(2048);
+    expect(won.endedAt).toBe(100);
+
+    const continued = continueTwenty48Game(won);
+    expect(continued.status).toBe("playing");
+    expect(continued.wonAtLeastOnce).toBe(true);
+
+    const undone = undoTwenty48Move(won);
+    expect(undone.board).toEqual(winning.board);
+    expect(undone.status).toBe("playing");
+
+    const lost = createTwenty48StateForTest([
+      2, 4, 8, 16,
+      32, 64, 128, 256,
+      512, 1024, 2, 4,
+      8, 16, 32, 64,
+    ]);
+    expect(lost.status).toBe("lost");
   });
 });

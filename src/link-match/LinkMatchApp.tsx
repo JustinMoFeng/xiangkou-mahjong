@@ -1,6 +1,9 @@
 import { ArrowLeft, ChevronRight, Lightbulb, RotateCcw, Shuffle, Timer } from "lucide-react";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { AudioControl } from "../casual/AudioControl";
+import type { CasualAudioSettings } from "../casual/audio";
 import { tileAssetPath, tileLabel } from "../casual/tiles";
+import { useCasualAudio } from "../casual/useCasualAudio";
 import {
   createLinkGame,
   revealLinkHint,
@@ -53,6 +56,7 @@ export default function LinkMatchApp({ onBackHome }: { onBackHome: () => void })
   const dragRef = useRef<{ pointerId: number; x: number; y: number; left: number; top: number; moved: boolean }>();
   const [visiblePath, setVisiblePath] = useState<RenderedPath>();
   const [isPanning, setIsPanning] = useState(false);
+  const { audioEnabled, settings, playAudio, toggleAudio, updateAudioSettings } = useCasualAudio("link-match");
   const now = useNowTick(state.status === "playing");
   const elapsedSeconds = Math.max(0, Math.floor(((state.endedAt ?? now) - state.startedAt) / 1000));
   const remainingSeconds = Math.max(0, state.timeLimitSeconds - elapsedSeconds);
@@ -102,13 +106,21 @@ export default function LinkMatchApp({ onBackHome }: { onBackHome: () => void })
     setBestTimes(saveLinkBestTime(state.levelId, finalSeconds));
   }, [state.endedAt, state.levelId, state.startedAt, state.status]);
 
+  useEffect(() => {
+    if (state.status === "won") {
+      playAudio("win");
+    }
+  }, [playAudio, state.status]);
+
   function restart() {
+    playAudio("restart");
     setState((current) =>
       createLinkGame(Date.now(), Date.now(), getLinkLevelPreset(current.levelId), current.endlessRound),
     );
   }
 
   function startLevel(level: LinkLevelPreset) {
+    playAudio("level-start");
     setVisiblePath(undefined);
     setSelectedLevel(level);
     window.history.replaceState({}, "", `${withBasePath("/play/link-match")}?level=${level.id}`);
@@ -116,6 +128,7 @@ export default function LinkMatchApp({ onBackHome }: { onBackHome: () => void })
   }
 
   function nextLevel() {
+    playAudio("level-start");
     const nextPreset = state.endless ? getLinkLevelPreset("endless") : getNextLinkLevelPreset(state.levelId);
     const carryItems = {
       hintsRemaining: Math.min(8, state.hintsRemaining + 1),
@@ -134,15 +147,27 @@ export default function LinkMatchApp({ onBackHome }: { onBackHome: () => void })
   }
 
   function pick(tile: LinkTile) {
-    setState((current) => selectLinkTile(current, tile.id));
+    const next = selectLinkTile(state, tile.id);
+    if (next !== state) {
+      playAudio(next.removedPairs > state.removedPairs ? "match" : "select");
+    }
+    setState(next);
   }
 
   function hint() {
-    setState((current) => revealLinkHint(current));
+    const next = revealLinkHint(state);
+    if (next !== state && next.hintsRemaining < state.hintsRemaining) {
+      playAudio("hint");
+    }
+    setState(next);
   }
 
   function shuffle() {
-    setState((current) => shuffleRemainingLinkTiles(current, Date.now(), true));
+    const next = shuffleRemainingLinkTiles(state, Date.now(), true);
+    if (next !== state && next.shuffleCount > state.shuffleCount) {
+      playAudio("shuffle");
+    }
+    setState(next);
   }
 
   function onPanStart(event: React.PointerEvent<HTMLDivElement>) {
@@ -211,9 +236,13 @@ export default function LinkMatchApp({ onBackHome }: { onBackHome: () => void })
 
       {!selectedLevel ? (
         <LevelSelect
+          audioEnabled={audioEnabled}
           bestTimes={bestTimes}
+          settings={settings}
           onBackHome={onBackHome}
           onStartLevel={startLevel}
+          onToggleAudio={toggleAudio}
+          onUpdateAudioSettings={updateAudioSettings}
         />
       ) : (
       <section className="link-game-frame" aria-label="麻将连连看">
@@ -239,6 +268,13 @@ export default function LinkMatchApp({ onBackHome }: { onBackHome: () => void })
             <span>洗牌 {state.shufflesRemaining}</span>
           </div>
           <div className="casual-actions" aria-label="连连看操作">
+            <AudioControl
+              audioEnabled={audioEnabled}
+              settings={settings}
+              buttonClassName="casual-icon-button"
+              onToggleAudio={toggleAudio}
+              onUpdateSettings={updateAudioSettings}
+            />
             <button type="button" onClick={restart}>
               <RotateCcw size={16} />
               重开
@@ -337,13 +373,21 @@ function withBasePath(path: string): string {
 }
 
 function LevelSelect({
+  audioEnabled,
   bestTimes,
+  settings,
   onBackHome,
   onStartLevel,
+  onToggleAudio,
+  onUpdateAudioSettings,
 }: {
+  audioEnabled: boolean;
   bestTimes: LinkBestTimes;
+  settings: CasualAudioSettings;
   onBackHome: () => void;
   onStartLevel: (level: LinkLevelPreset) => void;
+  onToggleAudio: () => void;
+  onUpdateAudioSettings: (settings: CasualAudioSettings) => void;
 }) {
   return (
     <section className="link-level-select" aria-label="麻将连连看关卡选择">
@@ -355,6 +399,13 @@ function LevelSelect({
           <p>麻将连连看</p>
           <h1>选择关卡</h1>
         </div>
+        <AudioControl
+          audioEnabled={audioEnabled}
+          settings={settings}
+          buttonClassName="casual-icon-button"
+          onToggleAudio={onToggleAudio}
+          onUpdateSettings={onUpdateAudioSettings}
+        />
       </header>
 
       <section className="link-level-grid" aria-label="连连看关卡">

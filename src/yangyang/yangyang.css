@@ -31,7 +31,7 @@
 
 .yang-level-select__top {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 10px;
   align-items: center;
   padding-bottom: 8px;

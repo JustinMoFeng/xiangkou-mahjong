@@ -169,6 +169,7 @@ test("home page lets you pick a mode and routes by path", async ({ page }) => {
   await expect(page.getByRole("button", { name: /川麻/ })).toBeVisible();
   await expect(page.getByRole("button", { name: "开始麻将连连看" })).toBeVisible();
   await expect(page.getByRole("button", { name: "开始麻将羊羊消" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "开始2048" })).toBeVisible();
 
   await page.getByRole("button", { name: "选择巷口麻将" }).click();
   await expect(page).toHaveURL(/\/game\/xiangkou$/);
@@ -194,6 +195,11 @@ test("home page lets you pick a mode and routes by path", async ({ page }) => {
   await page.getByRole("button", { name: "开始麻将羊羊消" }).click();
   await expect(page).toHaveURL(/\/play\/yangyang$/);
   await expect(page.getByLabel("麻将羊羊消关卡选择")).toBeVisible();
+
+  await page.goto("/");
+  await page.getByRole("button", { name: "开始2048" }).click();
+  await expect(page).toHaveURL(/\/play\/2048$/);
+  await expect(page.getByLabel("2048棋盘")).toBeVisible();
 });
 
 test("mahjong table rounds survive a browser refresh", async ({ page }) => {
@@ -564,6 +570,13 @@ test("casual games fit short mobile landscape browser viewports", async ({ page,
       supports: 0,
       tilesInsideMain: true,
     });
+    await assertCasualLayout(
+      `${viewport.width}x${viewport.height} 2048`,
+      "/play/2048",
+      ".twenty48-frame",
+      ".twenty48-board-wrap",
+      ".twenty48-topbar",
+    );
   }
 });
 
