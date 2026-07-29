@@ -1,4 +1,4 @@
-export type CasualAudioGame = "link-match" | "yangyang" | "parking";
+export type CasualAudioGame = "link-match" | "yangyang" | "parking" | "twenty48";
 
 export type CasualAudioEvent =
   | "level-start"
@@ -63,6 +63,15 @@ const SFX_PATHS: Record<CasualAudioGame, Partial<Record<CasualAudioEvent, string
     blocked: `${AUDIO_BASE}/sfx/parking-blocked.mp3`,
     hint: `${AUDIO_BASE}/sfx/parking-hint.mp3`,
     win: `${AUDIO_BASE}/sfx/parking-win.mp3`,
+  },
+  twenty48: {
+    "level-start": `${AUDIO_BASE}/sfx/link-start.mp3`,
+    restart: `${AUDIO_BASE}/sfx/link-restart.mp3`,
+    select: `${AUDIO_BASE}/sfx/link-select.mp3`,
+    match: `${AUDIO_BASE}/sfx/link-match.mp3`,
+    undo: `${AUDIO_BASE}/sfx/yang-undo.mp3`,
+    fail: `${AUDIO_BASE}/sfx/yang-fail.mp3`,
+    win: `${AUDIO_BASE}/sfx/link-win.mp3`,
   },
 };
 
@@ -233,6 +242,7 @@ export class CasualGameAudio {
   private initialTrackIndex(game: CasualAudioGame) {
     if (game === "yangyang") return 2;
     if (game === "parking") return 4;
+    if (game === "twenty48") return 1;
     return 0;
   }
 }

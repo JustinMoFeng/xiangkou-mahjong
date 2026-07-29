@@ -6,6 +6,7 @@ import { SichuanCreateRoom, SichuanJoinRoom } from "./online/SichuanRoom";
 import { XiangkouCreateRoom, XiangkouJoinRoom } from "./online/XiangkouRoom";
 import ParkingApp from "./parking/ParkingApp";
 import SichuanApp from "./sichuan/SichuanApp";
+import Twenty48App from "./twenty48/Twenty48App";
 import YangYangApp from "./yangyang/YangYangApp";
 import "./sichuan/sichuan.css";
 import "./home.css";
@@ -21,6 +22,7 @@ type View =
   | "classic"
   | "sichuan"
   | "link-match"
+  | "twenty48"
   | "parking"
   | "yangyang";
 
@@ -91,6 +93,9 @@ function resolveView(): View {
   if (path === "/play/link-match") {
     return "link-match";
   }
+  if (path === "/play/2048") {
+    return "twenty48";
+  }
   if (path === "/play/parking") {
     return "parking";
   }
@@ -128,6 +133,10 @@ export default function Root() {
     }
     if (mode === "link-match") {
       navigate("/play/link-match", "link-match");
+      return;
+    }
+    if (mode === "twenty48") {
+      navigate("/play/2048", "twenty48");
       return;
     }
     if (mode === "parking") {
@@ -229,6 +238,10 @@ export default function Root() {
 
   if (view === "link-match") {
     return <LinkMatchApp onBackHome={backHome} />;
+  }
+
+  if (view === "twenty48") {
+    return <Twenty48App onBackHome={backHome} />;
   }
 
   if (view === "parking") {

@@ -1,8 +1,8 @@
-import { ArrowLeft, Bot, ChevronRight, Grid3X3, Layers3, Plus, Route, Sparkles, Users } from "lucide-react";
+import { ArrowLeft, Bot, ChevronRight, Grid2X2, Grid3X3, Layers3, Plus, Route, Sparkles, Users } from "lucide-react";
 import { FormEvent, useState } from "react";
 import { normalizeRoomCode } from "./online/signaling";
 
-export type GameMode = "xiangkou" | "sichuan" | "link-match" | "yangyang" | "parking";
+export type GameMode = "xiangkou" | "sichuan" | "link-match" | "yangyang" | "parking" | "twenty48";
 
 export default function Home({ onSelect }: { onSelect: (mode: GameMode) => void }) {
   return (
@@ -79,6 +79,17 @@ export default function Home({ onSelect }: { onSelect: (mode: GameMode) => void 
                 <div className="home-card__body">
                   <h3>线阵清场</h3>
                   <p>点击箭头方向无阻的深色折线，让整条线从面板中抽离。</p>
+                </div>
+                <ChevronRight className="home-card__go" size={22} />
+              </button>
+
+              <button className="home-card home-card--twenty48" onClick={() => onSelect("twenty48")} aria-label="开始2048">
+                <div className="home-card__icon">
+                  <Grid2X2 size={28} />
+                </div>
+                <div className="home-card__body">
+                  <h3>2048</h3>
+                  <p>普通数字方格合成，保留当前分数、本局进度和最高分记录。</p>
                 </div>
                 <ChevronRight className="home-card__go" size={22} />
               </button>
